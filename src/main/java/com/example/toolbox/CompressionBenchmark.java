@@ -1,6 +1,7 @@
 package com.example.toolbox;
 
 import com.example.toolbox.service.CompressService;
+import com.example.toolbox.service.CompressService.CompressionResult;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.stereotype.Component;
@@ -34,10 +35,10 @@ public class CompressionBenchmark implements CommandLineRunner {
 
         for (int targetKB = 200; targetKB <= 7000; targetKB += 200) {
             long start = System.currentTimeMillis();
-            byte[] result = compressService.compressToTargetKB(mockFile, targetKB);
+            CompressionResult result = compressService.compressToTargetKB(mockFile, targetKB);
             long end = System.currentTimeMillis();
             
-            System.out.printf("%d\t%d\t%d\n", targetKB, result.length, (end - start));
+            System.out.printf("%d\t%d\t%d\n", targetKB, result.bytes().length, (end - start));
         }
         System.out.println("--- ✅ 测试结束 ---\n");
         System.exit(0);

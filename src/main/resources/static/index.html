@@ -11,7 +11,7 @@
     <style>
         body { background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); margin: 0; font-family: 'Helvetica Neue', sans-serif; height: 100vh; display: flex; justify-content: center; align-items: center; }
         #app { width: 100%; display: flex; justify-content: center; }
-        .main-card { width: 550px; background: white; padding: 40px; border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,0.1); text-align: center; }
+        .main-card { width: min(550px, calc(100vw - 32px)); background: white; padding: 40px; border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,0.1); text-align: center; box-sizing: border-box; }
         .title { font-size: 28px; margin: 0 0 10px 0; color: #303133; }
         .subtitle { color: #909399; margin-bottom: 30px; }
         .uploader-area { border: 2px dashed #409EFF; border-radius: 8px; padding: 40px; background: #ecf5ff; cursor: pointer; transition: 0.3s; }
@@ -21,15 +21,28 @@
         .preview-img { max-width: 100%; max-height: 100%; transition: filter 0.5s ease; }
         .is-blurred { filter: blur(15px); }
         .lock-mask { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.3); display: flex; flex-direction: column; justify-content: center; align-items: center; color: white; }
-        .qr-section img { width: 180px; height: 180px; padding: 5px; background: white; border: 1px solid #eee; }
-        .price { font-size: 24px; color: #F56C6C; font-weight: bold; margin: 10px 0; }
+        .stats-card { margin: 14px 0 18px; padding: 14px 16px; background: #f8fafc; border: 1px solid #dbe4f0; border-radius: 10px; text-align: left; }
+        .stats-title { margin: 0 0 8px; font-size: 14px; font-weight: 700; color: #303133; }
+        .stats-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 14px; }
+        .stats-item { font-size: 12px; color: #606266; }
+        .unlock-section { margin-bottom: 18px; }
+        .unlock-actions { display: flex; gap: 12px; margin-top: 14px; }
+        @media (max-width: 640px) {
+            body { padding: 16px; box-sizing: border-box; height: auto; min-height: 100vh; align-items: flex-start; }
+            .main-card { padding: 24px 16px; width: 100%; margin-top: 16px; }
+            .title { font-size: 24px; }
+            .config-bar { flex-wrap: wrap; gap: 10px; }
+            .preview-container { height: 220px; }
+            .stats-grid { grid-template-columns: 1fr; gap: 8px; }
+            .unlock-actions { flex-direction: column; }
+        }
     </style>
 </head>
 <body>
     <div id="app">
         <div class="main-card">
             <h1 class="title">🚀 极速图片压缩大师</h1>
-            <p class="subtitle">高精度字节级填充，先验货后付款</p>
+            <p class="subtitle">优先精确命中目标 KB，再尽量保住尺寸与清晰度</p>
 
             <div class="uploader-area" @click="$refs.fileInput.click()">
                 <div v-if="!selectedFileName">
@@ -45,7 +58,7 @@
 
             <div class="config-bar">
                 <span>期望压缩到:</span>
-                <el-input-number v-model="targetKB" :min="10" :max="10240" :step="50"></el-input-number>
+                <el-input-number v-model="targetKB" :min="1" :max="10240" :step="50"></el-input-number>
                 <span>KB</span>
             </div>
 
@@ -54,7 +67,10 @@
             </el-button>
 
             <!-- 支付墙弹窗 -->
-            <el-dialog v-model="visible" title="🎉 压缩已完成" width="480px" center :close-on-click-modal="false">
+            <el-dialog v-model="visible" width="min(480px, calc(100vw - 24px))" center :close-on-click-modal="false">
+                <template #header>
+                    <span style="font-size: 16px; font-weight: 700;">🎉 压缩已完成</span>
+                </template>
                 <div style="text-align: center;">
                     <p style="color: #67C23A; font-weight: bold; margin-bottom: 15px;">压缩图已就绪，请实时验货：</p>
                     
@@ -62,18 +78,34 @@
                         <img :src="previewUrl" class="preview-img" :class="{'is-blurred': !isPaid}">
                         <div v-if="!isPaid" class="lock-mask">
                             <p style="font-size: 30px; margin: 0;">🔒</p>
-                            <p>支付后解锁高清无损原图</p>
+                            <p>验证解锁码后查看并下载原图</p>
                         </div>
                     </div>
 
-                    <div class="qr-section" v-if="!isPaid">
-                        <img src="https://dummyimage.com/200x200/000/fff&text=WeChat+Pay">
-                        <div class="price">需支付: ￥4.9</div>
-                        <p style="color: #909399; font-size: 12px; margin-bottom: 20px;">扫码支付后点击下载，即可移除模糊效果并获取文件</p>
+                    <div class="stats-card" v-if="compressionMeta">
+                        <p class="stats-title">压缩详情</p>
+                        <div class="stats-grid">
+                            <div class="stats-item">目标大小: {{ targetKB }} KB</div>
+                            <div class="stats-item">实际大小: {{ compressionMeta.actualKB }} KB</div>
+                            <div class="stats-item">原始分辨率: {{ compressionMeta.originalWidth }} × {{ compressionMeta.originalHeight }}</div>
+                            <div class="stats-item">最终分辨率: {{ compressionMeta.finalWidth }} × {{ compressionMeta.finalHeight }}</div>
+                            <div class="stats-item">缩放比例: {{ compressionMeta.scalePercent }}</div>
+                            <div class="stats-item">JPEG质量: {{ compressionMeta.qualityPercent }}</div>
+                        </div>
                     </div>
 
-                    <el-button type="success" size="large" @click="unlockAndDownload" style="width: 100%; height: 50px;">
-                        {{ isPaid ? '重新下载' : '我已支付 4.9 元，立即下载' }}
+                    <div class="unlock-section" v-if="!isPaid">
+                        <el-button type="primary" @click="goToXianyu" style="width: 100%; height: 44px;">
+                            前往获取单次解锁码 (4.9元)
+                        </el-button>
+                        <div class="unlock-actions">
+                            <el-input v-model="verifyCode" maxlength="6" placeholder="请输入 6 位解锁码"></el-input>
+                            <el-button type="success" :loading="verifying" @click="verifyAndUnlock">确认解锁</el-button>
+                        </div>
+                    </div>
+
+                    <el-button type="success" size="large" @click="handleDownloadClick" style="width: 100%; height: 50px;">
+                        {{ isPaid ? '重新下载' : '请先解锁后下载' }}
                     </el-button>
                 </div>
             </el-dialog>
@@ -88,11 +120,19 @@
                 const loading = ref(false);
                 const visible = ref(false);
                 const isPaid = ref(false);
+                const verifying = ref(false);
                 const selectedFileName = ref('');
                 const selectedFileSize = ref(0);
                 const fileObj = ref(null);
                 const previewUrl = ref('');
+                const unlockedUrl = ref('');
                 const actualBlob = ref(null);
+                const compressionMeta = ref(null);
+                const outputFormat = ref('jpg');
+                const verifyCode = ref('');
+                const kouling = "【闲鱼】https://m.tb.cn/h.iKsKJjG?tk=zWPc5hQJCjB CZ007 「我在闲鱼发布了【证件照/教资图片精准压缩工具 单次高清解锁码】」点击链接直接打开";
+                const shortUrl = "https://m.tb.cn/h.iKsKJjG";
+                const itemId = "1043861534934";
 
                 const onFileChange = (e) => {
                     const file = e.target.files[0];
@@ -101,12 +141,86 @@
                         selectedFileName.value = file.name;
                         selectedFileSize.value = file.size;
                         isPaid.value = false;
-                        if(previewUrl.value) URL.revokeObjectURL(previewUrl.value);
+                        verifyCode.value = '';
+                        compressionMeta.value = null;
+                        outputFormat.value = 'jpg';
+                        if(unlockedUrl.value) URL.revokeObjectURL(unlockedUrl.value);
+                        previewUrl.value = '';
+                        unlockedUrl.value = '';
                     }
                 };
 
+                const readErrorText = async (blob) => {
+                    try {
+                        return await blob.text();
+                    } catch (_) {
+                        return '';
+                    }
+                };
+
+                const copyText = async (text) => {
+                    if (navigator.clipboard && window.isSecureContext) {
+                        await navigator.clipboard.writeText(text);
+                        return;
+                    }
+
+                    const textarea = document.createElement('textarea');
+                    textarea.value = text;
+                    textarea.setAttribute('readonly', 'true');
+                    textarea.style.position = 'fixed';
+                    textarea.style.opacity = '0';
+                    textarea.style.pointerEvents = 'none';
+                    document.body.appendChild(textarea);
+                    textarea.focus();
+                    textarea.select();
+                    const success = document.execCommand('copy');
+                    document.body.removeChild(textarea);
+
+                    if (!success) {
+                        throw new Error('copy failed');
+                    }
+                };
+
+                const goToXianyu = async () => {
+                    try {
+                        await copyText(kouling);
+                        ElementPlus.ElMessage.success("淘口令已复制！若未自动跳转，请直接打开闲鱼App");
+                    } catch (_) {
+                        ElementPlus.ElMessage.warning("淘口令复制失败，请手动复制后打开闲鱼App");
+                    }
+
+                    const appUrl = `fleamarket://item?id=${itemId}`;
+                    window.location.href = appUrl;
+
+                    setTimeout(() => {
+                        window.open(shortUrl, '_blank');
+                    }, 800);
+                };
+
+                const createLockedPreview = (blob) => new Promise((resolve, reject) => {
+                    const tempUrl = URL.createObjectURL(blob);
+                    const img = new Image();
+                    img.onload = () => {
+                        const maxWidth = 420;
+                        const scale = Math.min(1, maxWidth / img.width);
+                        const canvas = document.createElement('canvas');
+                        canvas.width = Math.max(1, Math.round(img.width * scale));
+                        canvas.height = Math.max(1, Math.round(img.height * scale));
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        URL.revokeObjectURL(tempUrl);
+                        resolve(canvas.toDataURL('image/jpeg', 0.6));
+                    };
+                    img.onerror = () => {
+                        URL.revokeObjectURL(tempUrl);
+                        reject(new Error('预览图生成失败'));
+                    };
+                    img.src = tempUrl;
+                });
+
                 const submit = async () => {
                     if(!fileObj.value) return ElementPlus.ElMessage.warning('请先选择图片');
+                    if(!targetKB.value || targetKB.value < 1) return ElementPlus.ElMessage.warning('目标大小必须大于 0KB');
                     loading.value = true;
                     const fd = new FormData();
                     fd.append('file', fileObj.value);
@@ -114,28 +228,92 @@
                     try {
                         const res = await axios.post('/api/compress', fd, { responseType: 'blob' });
                         actualBlob.value = res.data;
-                        previewUrl.value = URL.createObjectURL(actualBlob.value);
+                        compressionMeta.value = parseCompressionMeta(res.headers);
+                        outputFormat.value = (res.headers?.['x-output-format'] || 'jpg').toLowerCase();
+                        if(unlockedUrl.value) URL.revokeObjectURL(unlockedUrl.value);
+                        unlockedUrl.value = URL.createObjectURL(actualBlob.value);
+                        previewUrl.value = await createLockedPreview(actualBlob.value);
                         visible.value = true;
                         isPaid.value = false;
+                        verifyCode.value = '';
                     } catch(e) {
-                        ElementPlus.ElMessage.error('服务器响应超时，请刷新重试');
+                        const message = e.response?.data
+                            ? await readErrorText(e.response.data)
+                            : '';
+                        ElementPlus.ElMessage.error(message || '压缩失败，请稍后重试');
                     } finally {
                         loading.value = false;
                     }
                 };
 
-                const unlockAndDownload = () => {
-                    isPaid.value = true;
+                const parseCompressionMeta = (headers) => {
+                    const getNumber = (name) => Number(headers?.[name] ?? 0);
+                    const scale = Number(headers?.['x-scale'] ?? 1);
+                    const quality = Number(headers?.['x-quality'] ?? 1);
+                    const paddedBytes = getNumber('x-padded-bytes');
+                    const finalWidth = getNumber('x-final-width');
+                    const finalHeight = getNumber('x-final-height');
+                    const originalWidth = getNumber('x-original-width');
+                    const originalHeight = getNumber('x-original-height');
+                    const actualBytes = getNumber('x-actual-bytes');
+                    return {
+                        originalWidth,
+                        originalHeight,
+                        finalWidth,
+                        finalHeight,
+                        actualKB: (actualBytes / 1024).toFixed(2),
+                        scalePercent: `${(scale * 100).toFixed(1)}%`,
+                        qualityPercent: `${(quality * 100).toFixed(1)}%`
+                    };
+                };
+
+                const downloadFile = () => {
+                    if (!unlockedUrl.value) {
+                        ElementPlus.ElMessage.error('下载资源未准备好，请重新压缩一次');
+                        return;
+                    }
+                    const baseName = selectedFileName.value.replace(/\.[^.]+$/, '');
                     const link = document.createElement('a');
-                    link.href = previewUrl.value;
-                    link.download = `compressed_${selectedFileName.value}`;
+                    link.href = unlockedUrl.value;
+                    link.download = `compressed_${baseName}.${outputFormat.value}`;
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);
                     ElementPlus.ElMessage.success('已开始下载！');
                 };
 
-                return { targetKB, loading, visible, isPaid, selectedFileName, selectedFileSize, onFileChange, submit, unlockAndDownload, previewUrl };
+                const handleDownloadClick = () => {
+                    if (!isPaid.value) {
+                        ElementPlus.ElMessage.warning('请先输入并验证 6 位解锁码');
+                        return;
+                    }
+                    downloadFile();
+                };
+
+                const verifyAndUnlock = async () => {
+                    if (!verifyCode.value || verifyCode.value.trim().length !== 6) {
+                        return ElementPlus.ElMessage.warning('请输入 6 位解锁码');
+                    }
+                    verifying.value = true;
+                    try {
+                        const res = await axios.post('/api/verify', { code: verifyCode.value.trim() });
+                        if (res.data?.success) {
+                            isPaid.value = true;
+                            previewUrl.value = unlockedUrl.value;
+                            ElementPlus.ElMessage.success('解锁成功，原图即将下载！');
+                            downloadFile();
+                        } else {
+                            ElementPlus.ElMessage.error(res.data?.message || '验证码无效');
+                        }
+                    } catch (e) {
+                        const message = e.response?.data?.message || e.response?.data || '验证码校验失败';
+                        ElementPlus.ElMessage.error(message);
+                    } finally {
+                        verifying.value = false;
+                    }
+                };
+
+                return { targetKB, loading, visible, isPaid, verifying, selectedFileName, selectedFileSize, onFileChange, submit, verifyAndUnlock, handleDownloadClick, previewUrl, compressionMeta, verifyCode, goToXianyu };
             }
         }).use(ElementPlus).mount('#app');
     </script>
