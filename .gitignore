@@ -1,0 +1,17 @@
+.DS_Store
+
+# Java / Maven
+target/
+*.class
+*.log
+
+# IDE
+.idea/
+*.iml
+
+# Frontend dependencies / build cache
+frontend/node_modules/
+frontend/dist/
+
+# Local runtime files
+backend.log

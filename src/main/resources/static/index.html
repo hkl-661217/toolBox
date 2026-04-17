@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🚀 极速图片压缩大师 - 高精度版</title>
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
+    <script src="https://unpkg.com/vue@3"></script>
+    <script src="https://unpkg.com/element-plus"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <style>
+        body { background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); margin: 0; font-family: 'Helvetica Neue', sans-serif; height: 100vh; display: flex; justify-content: center; align-items: center; }
+        #app { width: 100%; display: flex; justify-content: center; }
+        .main-card { width: 550px; background: white; padding: 40px; border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,0.1); text-align: center; }
+        .title { font-size: 28px; margin: 0 0 10px 0; color: #303133; }
+        .subtitle { color: #909399; margin-bottom: 30px; }
+        .uploader-area { border: 2px dashed #409EFF; border-radius: 8px; padding: 40px; background: #ecf5ff; cursor: pointer; transition: 0.3s; }
+        .uploader-area:hover { background: #d9ecff; }
+        .config-bar { margin-top: 30px; display: flex; align-items: center; justify-content: center; gap: 15px; }
+        .preview-container { position: relative; width: 100%; height: 250px; border-radius: 8px; overflow: hidden; background: #f0f2f5; display: flex; justify-content: center; align-items: center; margin: 20px 0; border: 1px solid #dcdfe6; }
+        .preview-img { max-width: 100%; max-height: 100%; transition: filter 0.5s ease; }
+        .is-blurred { filter: blur(15px); }
+        .lock-mask { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.3); display: flex; flex-direction: column; justify-content: center; align-items: center; color: white; }
+        .qr-section img { width: 180px; height: 180px; padding: 5px; background: white; border: 1px solid #eee; }
+        .price { font-size: 24px; color: #F56C6C; font-weight: bold; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="main-card">
+            <h1 class="title">🚀 极速图片压缩大师</h1>
+            <p class="subtitle">高精度字节级填充，先验货后付款</p>
+
+            <div class="uploader-area" @click="$refs.fileInput.click()">
+                <div v-if="!selectedFileName">
+                    <p style="font-size: 40px; margin: 0;">📤</p>
+                    <p style="color: #409EFF;">点击或拖拽图片到这里</p>
+                </div>
+                <div v-else>
+                    <p style="color: #67C23A; font-weight: bold;">已选择: {{ selectedFileName }}</p>
+                    <p style="font-size: 12px; color: #909399;">大小: {{ Math.round(selectedFileSize / 1024) }} KB</p>
+                </div>
+                <input type="file" ref="fileInput" @change="onFileChange" accept="image/*" style="display: none">
+            </div>
+
+            <div class="config-bar">
+                <span>期望压缩到:</span>
+                <el-input-number v-model="targetKB" :min="10" :max="10240" :step="50"></el-input-number>
+                <span>KB</span>
+            </div>
+
+            <el-button type="primary" size="large" :loading="loading" @click="submit" style="width: 100%; height: 50px; margin-top: 25px; font-size: 18px;">
+                {{ loading ? '正在执行极限精度压缩...' : '极速压缩并预览' }}
+            </el-button>
+
+            <!-- 支付墙弹窗 -->
+            <el-dialog v-model="visible" title="🎉 压缩已完成" width="480px" center :close-on-click-modal="false">
+                <div style="text-align: center;">
+                    <p style="color: #67C23A; font-weight: bold; margin-bottom: 15px;">压缩图已就绪，请实时验货：</p>
+                    
+                    <div class="preview-container">
+                        <img :src="previewUrl" class="preview-img" :class="{'is-blurred': !isPaid}">
+                        <div v-if="!isPaid" class="lock-mask">
+                            <p style="font-size: 30px; margin: 0;">🔒</p>
+                            <p>支付后解锁高清无损原图</p>
+                        </div>
+                    </div>
+
+                    <div class="qr-section" v-if="!isPaid">
+                        <img src="https://dummyimage.com/200x200/000/fff&text=WeChat+Pay">
+                        <div class="price">需支付: ￥4.9</div>
+                        <p style="color: #909399; font-size: 12px; margin-bottom: 20px;">扫码支付后点击下载，即可移除模糊效果并获取文件</p>
+                    </div>
+
+                    <el-button type="success" size="large" @click="unlockAndDownload" style="width: 100%; height: 50px;">
+                        {{ isPaid ? '重新下载' : '我已支付 4.9 元，立即下载' }}
+                    </el-button>
+                </div>
+            </el-dialog>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref } = Vue;
+        createApp({
+            setup() {
+                const targetKB = ref(50);
+                const loading = ref(false);
+                const visible = ref(false);
+                const isPaid = ref(false);
+                const selectedFileName = ref('');
+                const selectedFileSize = ref(0);
+                const fileObj = ref(null);
+                const previewUrl = ref('');
+                const actualBlob = ref(null);
+
+                const onFileChange = (e) => {
+                    const file = e.target.files[0];
+                    if(file) {
+                        fileObj.value = file;
+                        selectedFileName.value = file.name;
+                        selectedFileSize.value = file.size;
+                        isPaid.value = false;
+                        if(previewUrl.value) URL.revokeObjectURL(previewUrl.value);
+                    }
+                };
+
+                const submit = async () => {
+                    if(!fileObj.value) return ElementPlus.ElMessage.warning('请先选择图片');
+                    loading.value = true;
+                    const fd = new FormData();
+                    fd.append('file', fileObj.value);
+                    fd.append('targetKB', targetKB.value);
+                    try {
+                        const res = await axios.post('/api/compress', fd, { responseType: 'blob' });
+                        actualBlob.value = res.data;
+                        previewUrl.value = URL.createObjectURL(actualBlob.value);
+                        visible.value = true;
+                        isPaid.value = false;
+                    } catch(e) {
+                        ElementPlus.ElMessage.error('服务器响应超时，请刷新重试');
+                    } finally {
+                        loading.value = false;
+                    }
+                };
+
+                const unlockAndDownload = () => {
+                    isPaid.value = true;
+                    const link = document.createElement('a');
+                    link.href = previewUrl.value;
+                    link.download = `compressed_${selectedFileName.value}`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    ElementPlus.ElMessage.success('已开始下载！');
+                };
+
+                return { targetKB, loading, visible, isPaid, selectedFileName, selectedFileSize, onFileChange, submit, unlockAndDownload, previewUrl };
+            }
+        }).use(ElementPlus).mount('#app');
+    </script>
+</body>
+</html>
