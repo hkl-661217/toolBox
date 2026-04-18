@@ -113,9 +113,11 @@
     </div>
 
     <script>
-        const { createApp, ref } = Vue;
+        const { createApp, ref, onMounted } = Vue;
         createApp({
             setup() {
+                const CACHED_PHOTO_KEY = 'cached_compressed_photo';
+                const PHOTO_EXPIRE_KEY = 'photo_expire_time';
                 const targetKB = ref(50);
                 const loading = ref(false);
                 const visible = ref(false);
@@ -133,6 +135,46 @@
                 const kouling = "【闲鱼】https://m.tb.cn/h.iKsKJjG?tk=zWPc5hQJCjB CZ007 「我在闲鱼发布了【证件照/教资图片精准压缩工具 单次高清解锁码】」点击链接直接打开";
                 const shortUrl = "https://m.tb.cn/h.iKsKJjG";
                 const itemId = "1043861534934";
+
+                const clearCachedPhoto = () => {
+                    localStorage.removeItem(CACHED_PHOTO_KEY);
+                    localStorage.removeItem(PHOTO_EXPIRE_KEY);
+                };
+
+                const blobToDataUrl = (blob) => new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result);
+                    reader.onerror = () => reject(new Error('图片缓存失败'));
+                    reader.readAsDataURL(blob);
+                });
+
+                const inferFormatFromDataUrl = (dataUrl) => {
+                    const mime = (dataUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,/) || [])[1] || '';
+                    if (mime.includes('png')) return 'png';
+                    if (mime.includes('webp')) return 'webp';
+                    return 'jpg';
+                };
+
+                const restoreCachedPhoto = () => {
+                    const cachedPhoto = localStorage.getItem(CACHED_PHOTO_KEY);
+                    const expireTime = Number(localStorage.getItem(PHOTO_EXPIRE_KEY) || 0);
+
+                    if (!cachedPhoto || !expireTime || Date.now() >= expireTime) {
+                        clearCachedPhoto();
+                        return;
+                    }
+
+                    unlockedUrl.value = cachedPhoto;
+                    previewUrl.value = cachedPhoto;
+                    outputFormat.value = inferFormatFromDataUrl(cachedPhoto);
+                    visible.value = true;
+                    isPaid.value = false;
+                    verifyCode.value = '';
+                    selectedFileName.value = 'cached_compressed_photo';
+                    selectedFileSize.value = 0;
+                    fileObj.value = null;
+                    compressionMeta.value = null;
+                };
 
                 const onFileChange = (e) => {
                     const file = e.target.files[0];
@@ -230,8 +272,12 @@
                         actualBlob.value = res.data;
                         compressionMeta.value = parseCompressionMeta(res.headers);
                         outputFormat.value = (res.headers?.['x-output-format'] || 'jpg').toLowerCase();
-                        if(unlockedUrl.value) URL.revokeObjectURL(unlockedUrl.value);
-                        unlockedUrl.value = URL.createObjectURL(actualBlob.value);
+                        if (unlockedUrl.value && unlockedUrl.value.startsWith('blob:')) {
+                            URL.revokeObjectURL(unlockedUrl.value);
+                        }
+                        unlockedUrl.value = await blobToDataUrl(actualBlob.value);
+                        localStorage.setItem(CACHED_PHOTO_KEY, unlockedUrl.value);
+                        localStorage.setItem(PHOTO_EXPIRE_KEY, String(Date.now() + 1000 * 60 * 60));
                         previewUrl.value = await createLockedPreview(actualBlob.value);
                         visible.value = true;
                         isPaid.value = false;
@@ -302,6 +348,7 @@
                             previewUrl.value = unlockedUrl.value;
                             ElementPlus.ElMessage.success('解锁成功，原图即将下载！');
                             downloadFile();
+                            clearCachedPhoto();
                         } else {
                             ElementPlus.ElMessage.error(res.data?.message || '验证码无效');
                         }
@@ -312,6 +359,10 @@
                         verifying.value = false;
                     }
                 };
+
+                onMounted(() => {
+                    restoreCachedPhoto();
+                });
 
                 return { targetKB, loading, visible, isPaid, verifying, selectedFileName, selectedFileSize, onFileChange, submit, verifyAndUnlock, handleDownloadClick, previewUrl, compressionMeta, verifyCode, goToXianyu };
             }
