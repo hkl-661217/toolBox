@@ -16,9 +16,14 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class MscBrowserTracker implements AutoCloseable {
     public static final String TRACKING_URL = "https://www.msccargo.cn/zh/track-a-shipment";
+    private static final Logger LOGGER = LoggerFactory.getLogger(MscBrowserTracker.class);
+    private static final double PAGE_NAVIGATION_TIMEOUT_MS = 120_000;
+    private static final long PAGE_READY_TIMEOUT_MS = 75_000;
 
     private final Playwright playwright;
     private final Browser browser;
@@ -49,6 +54,23 @@ public class MscBrowserTracker implements AutoCloseable {
             dismissCookieBanners(page);
 
             String initialText = readVisibleText(page);
+            if (MscPageDiagnostics.isAccessDenied(initialText)) {
+                String screenshotPath = safeScreenshot(page, screenshotFile, rawTrackingNumbersForSanitizing);
+                String rawText = MscTrackingSanitizer.sanitize(initialText, rawTrackingNumbersForSanitizing);
+                return MscTrackingResult.of(
+                        trackingNoMasked,
+                        queryType,
+                        MscTrackingStatus.FAILED,
+                        rawText,
+                        textParser.parse(rawText),
+                        screenshotPath,
+                        MscPageDiagnostics.buildErrorReason(
+                                "MSC page returned Access Denied",
+                                readPageState(page),
+                                null,
+                                rawTrackingNumbersForSanitizing),
+                        queriedAt);
+            }
             if (requiresManualAction(initialText)) {
                 String screenshotPath = safeScreenshot(page, screenshotFile, rawTrackingNumbersForSanitizing);
                 String rawText = MscTrackingSanitizer.sanitize(initialText, rawTrackingNumbersForSanitizing);
@@ -66,8 +88,21 @@ public class MscBrowserTracker implements AutoCloseable {
             boolean submittedWithForm = fillAndSubmit(page, trackingNo, queryType);
             boolean directUrlFallbackUsed = false;
             if (!submittedWithForm) {
-                navigateToDirectTrackingUrl(page, trackingNo);
-                directUrlFallbackUsed = true;
+                String screenshotPath = safeScreenshot(page, screenshotFile, rawTrackingNumbersForSanitizing);
+                String rawText = MscTrackingSanitizer.sanitize(initialText, rawTrackingNumbersForSanitizing);
+                return MscTrackingResult.of(
+                        trackingNoMasked,
+                        queryType,
+                        MscTrackingStatus.PAGE_ERROR,
+                        rawText,
+                        textParser.parse(rawText),
+                        screenshotPath,
+                        MscPageDiagnostics.buildErrorReason(
+                                "页面打开但查询输入框未找到",
+                                readPageState(page),
+                                null,
+                                rawTrackingNumbersForSanitizing),
+                        queriedAt);
             }
 
             waitForResultOrPageChange(page, trackingNo, initialText);
@@ -83,7 +118,13 @@ public class MscBrowserTracker implements AutoCloseable {
                     rawTrackingNumbersForSanitizing);
             MscTrackingParsedFields parsedFields = textParser.parse(sanitizedText);
             MscTrackingStatus status = classify(rawTextBeforeSanitizing, parsedFields);
-            String errorReason = errorReason(status, submittedWithForm, directUrlFallbackUsed);
+            String errorReason = MscPageDiagnostics.isAccessDenied(rawTextBeforeSanitizing)
+                    ? MscPageDiagnostics.buildErrorReason(
+                            "MSC page returned Access Denied",
+                            readPageState(page),
+                            null,
+                            rawTrackingNumbersForSanitizing)
+                    : errorReason(status, submittedWithForm, directUrlFallbackUsed);
             String screenshotPath = safeScreenshot(page, screenshotFile, rawTrackingNumbersForSanitizing);
 
             return MscTrackingResult.of(
@@ -98,8 +139,10 @@ public class MscBrowserTracker implements AutoCloseable {
         } catch (Exception error) {
             String rawText = safeReadVisibleText(page, rawTrackingNumbersForSanitizing);
             String screenshotPath = safeScreenshot(page, screenshotFile, rawTrackingNumbersForSanitizing);
-            String errorReason = MscTrackingSanitizer.sanitize(
-                    error.getClass().getSimpleName() + ": " + nullSafeMessage(error),
+            String errorReason = MscPageDiagnostics.buildErrorReason(
+                    "MSC tracking query failed",
+                    readPageState(page),
+                    error,
                     rawTrackingNumbersForSanitizing);
             return MscTrackingResult.of(
                     trackingNoMasked,
@@ -138,17 +181,61 @@ public class MscBrowserTracker implements AutoCloseable {
     }
 
     private static void navigateToTrackingPage(Page page) {
-        page.navigate(TRACKING_URL, new Page.NavigateOptions()
-                .setWaitUntil(WaitUntilState.DOMCONTENTLOADED)
-                .setTimeout(60_000));
+        navigateToPage(page, TRACKING_URL);
+        waitForTrackingPageReady(page);
         waitForSoftNetworkIdle(page);
     }
 
     private static void navigateToDirectTrackingUrl(Page page, String trackingNo) {
-        page.navigate(TRACKING_URL + "?tnumber=" + urlEncode(trackingNo), new Page.NavigateOptions()
-                .setWaitUntil(WaitUntilState.DOMCONTENTLOADED)
-                .setTimeout(60_000));
+        navigateToPage(page, TRACKING_URL + "?tnumber=" + urlEncode(trackingNo));
         waitForSoftNetworkIdle(page);
+    }
+
+    private static void navigateToPage(Page page, String url) {
+        try {
+            page.navigate(url, new Page.NavigateOptions()
+                    .setWaitUntil(WaitUntilState.DOMCONTENTLOADED)
+                    .setTimeout(PAGE_NAVIGATION_TIMEOUT_MS));
+            return;
+        } catch (RuntimeException firstError) {
+            MscPageDiagnostics.PageState state = readPageState(page);
+            LOGGER.warn("MSC page navigation did not reach DOMCONTENTLOADED in time; title={}",
+                    state.title(),
+                    firstError);
+            if (MscPageDiagnostics.hasAnyPageSignal(state)) {
+                return;
+            }
+
+            try {
+                page.navigate(url, new Page.NavigateOptions()
+                        .setWaitUntil(WaitUntilState.COMMIT)
+                        .setTimeout(PAGE_NAVIGATION_TIMEOUT_MS));
+            } catch (RuntimeException fallbackError) {
+                fallbackError.addSuppressed(firstError);
+                throw fallbackError;
+            }
+        }
+    }
+
+    private static void waitForTrackingPageReady(Page page) {
+        long deadline = System.currentTimeMillis() + PAGE_READY_TIMEOUT_MS;
+        RuntimeException lastReadError = null;
+        while (System.currentTimeMillis() < deadline) {
+            MscPageDiagnostics.PageState state = readPageState(page);
+            if (MscPageDiagnostics.isAccessDenied(state.title())
+                    || MscPageDiagnostics.isAccessDenied(state.bodyText())) {
+                throw new IllegalStateException("MSC page returned Access Denied.");
+            }
+            if (MscPageDiagnostics.isPageUsable(state)) {
+                return;
+            }
+            try {
+                page.waitForTimeout(1_000);
+            } catch (RuntimeException error) {
+                lastReadError = error;
+            }
+        }
+        throw new IllegalStateException("MSC tracking page did not become ready.", lastReadError);
     }
 
     private static boolean fillAndSubmit(Page page, String trackingNo, MscTrackingQueryType queryType) {
@@ -312,6 +399,9 @@ public class MscBrowserTracker implements AutoCloseable {
     }
 
     private static MscTrackingStatus classify(String rawText, MscTrackingParsedFields parsedFields) {
+        if (MscPageDiagnostics.isAccessDenied(rawText)) {
+            return MscTrackingStatus.FAILED;
+        }
         if (requiresManualAction(rawText)) {
             return MscTrackingStatus.MANUAL_REQUIRED;
         }
@@ -415,6 +505,37 @@ public class MscBrowserTracker implements AutoCloseable {
         }
     }
 
+    private static MscPageDiagnostics.PageState readPageState(Page page) {
+        return new MscPageDiagnostics.PageState(
+                safePageUrl(page),
+                safePageTitle(page),
+                safeRawVisibleText(page));
+    }
+
+    private static String safePageUrl(Page page) {
+        try {
+            return page.url();
+        } catch (RuntimeException ignored) {
+            return "";
+        }
+    }
+
+    private static String safePageTitle(Page page) {
+        try {
+            return page.title();
+        } catch (RuntimeException ignored) {
+            return "";
+        }
+    }
+
+    private static String safeRawVisibleText(Page page) {
+        try {
+            return readVisibleText(page);
+        } catch (RuntimeException ignored) {
+            return "";
+        }
+    }
+
     private static String safeScreenshot(Page page, Path screenshotFile, List<String> rawTrackingNumbersForSanitizing) {
         try {
             Files.createDirectories(screenshotFile.toAbsolutePath().getParent());
@@ -489,10 +610,6 @@ public class MscBrowserTracker implements AutoCloseable {
 
     private static String normalizeText(String text) {
         return text == null ? "" : text.replaceAll("\\s+", " ").trim();
-    }
-
-    private static String nullSafeMessage(Throwable error) {
-        return error.getMessage() == null ? "" : error.getMessage();
     }
 
     private static String now() {
