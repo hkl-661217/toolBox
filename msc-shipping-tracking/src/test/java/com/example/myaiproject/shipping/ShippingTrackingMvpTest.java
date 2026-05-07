@@ -25,6 +25,8 @@ import java.time.OffsetDateTime;
 import java.util.ArrayDeque;
 import java.util.List;
 import java.util.Queue;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,6 +37,10 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -49,6 +55,8 @@ class ShippingTrackingMvpTest {
     ShippingTrackingScheduler scheduler;
     @Autowired
     JdbcTemplate jdbcTemplate;
+    @Autowired
+    PlatformTransactionManager transactionManager;
     @Autowired
     FakeMscTrackingClient fakeClient;
     @Autowired
@@ -79,6 +87,25 @@ class ShippingTrackingMvpTest {
         assertEquals(1, countWhere("shipping_tracking_snapshot", "baseline = true"));
         assertEquals(0, count("shipping_tracking_change_log"));
         assertEquals(0, notificationSender.sentMessages.size());
+    }
+
+    @Test
+    void createBindingCommitsBindingBeforeBaselineQueryOutsideTransaction() {
+        AtomicBoolean transactionActiveDuringQuery = new AtomicBoolean(true);
+        AtomicInteger visibleBindingsDuringQuery = new AtomicInteger(-1);
+        fakeClient.beforeQuery = () -> {
+            transactionActiveDuringQuery.set(TransactionSynchronizationManager.isActualTransactionActive());
+            TransactionTemplate requiresNew = new TransactionTemplate(transactionManager);
+            requiresNew.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+            visibleBindingsDuringQuery.set(requiresNew.execute(status -> count("shipping_tracking_binding")));
+        };
+        fakeClient.enqueue(success(List.of(event("18/05/2026", "Ningbo, CN", "Full Intended Transshipment", "MSC A"))));
+
+        ShippingTrackingBinding binding = service.createBinding("ORD-TX-CREATE", "177C1234498");
+
+        assertNotNull(binding.id());
+        assertFalse(transactionActiveDuringQuery.get());
+        assertEquals(1, visibleBindingsDuringQuery.get());
     }
 
     @Test
@@ -306,6 +333,20 @@ class ShippingTrackingMvpTest {
     }
 
     @Test
+    void syncQueriesMscOutsideTransaction() {
+        List<ShippingTrackingEvent> baseline = List.of(event("18/05/2026", "Ningbo, CN", "Loaded", "MSC A"));
+        fakeClient.enqueue(success(baseline));
+        ShippingTrackingBinding binding = service.createBinding("ORD-TX-SYNC", "177C1234498");
+        AtomicBoolean transactionActiveDuringQuery = new AtomicBoolean(true);
+        fakeClient.beforeQuery = () -> transactionActiveDuringQuery.set(TransactionSynchronizationManager.isActualTransactionActive());
+        fakeClient.enqueue(success(baseline));
+
+        service.syncBinding(binding.id());
+
+        assertFalse(transactionActiveDuringQuery.get());
+    }
+
+    @Test
     void scheduledJobContinuesWhenOneBindingFails() {
         fakeClient.enqueue(success(List.of(event("18/05/2026", "Ningbo, CN", "Loaded", "MSC A"))));
         ShippingTrackingBinding first = service.createBinding("ORD-005", "177C1234498");
@@ -474,6 +515,7 @@ class ShippingTrackingMvpTest {
     static class FakeMscTrackingClient implements MscTrackingClient {
         private final Queue<Object> outcomes = new ArrayDeque<>();
         int queryCount;
+        Runnable beforeQuery;
 
         void enqueue(MscTrackingQueryResult result) {
             outcomes.add(result);
@@ -486,11 +528,15 @@ class ShippingTrackingMvpTest {
         void reset() {
             outcomes.clear();
             queryCount = 0;
+            beforeQuery = null;
         }
 
         @Override
         public MscTrackingQueryResult queryBooking(String bookingNo) {
             queryCount++;
+            if (beforeQuery != null) {
+                beforeQuery.run();
+            }
             Object outcome = outcomes.remove();
             if (outcome instanceof RuntimeException error) {
                 throw error;

@@ -17,7 +17,9 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 public class ShippingTrackingService {
@@ -31,6 +33,7 @@ public class ShippingTrackingService {
     private final TrackingNotificationSender notificationSender;
     private final ShippingTrackingEmailTemplateBuilder emailTemplateBuilder;
     private final ObjectMapper objectMapper;
+    private final TransactionTemplate transactionTemplate;
 
     public ShippingTrackingService(
             ShippingTrackingBindingRepository bindingRepository,
@@ -40,7 +43,8 @@ public class ShippingTrackingService {
             MscTrackingClient mscTrackingClient,
             TrackingNotificationSender notificationSender,
             ShippingTrackingEmailTemplateBuilder emailTemplateBuilder,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            PlatformTransactionManager transactionManager) {
         this.bindingRepository = bindingRepository;
         this.snapshotRepository = snapshotRepository;
         this.changeLogRepository = changeLogRepository;
@@ -49,16 +53,18 @@ public class ShippingTrackingService {
         this.notificationSender = notificationSender;
         this.emailTemplateBuilder = emailTemplateBuilder;
         this.objectMapper = objectMapper;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
-    @Transactional
     public ShippingTrackingBinding createBinding(String orderNo, String bookingNo) {
         String cleanOrderNo = requireText(orderNo, "订单号不能为空");
         String cleanBookingNo = requireText(bookingNo, "订舱号不能为空");
         OffsetDateTime now = OffsetDateTime.now();
-        ShippingTrackingBinding binding = bindingRepository.insert(cleanOrderNo, cleanBookingNo, now);
-        queryAndPersist(binding, true, false);
-        return bindingRepository.findById(binding.id()).orElseThrow();
+        ShippingTrackingBinding binding = transactionTemplate.execute(
+                status -> bindingRepository.insert(cleanOrderNo, cleanBookingNo, now));
+        MscTrackingQueryResult queryResult = querySafely(binding.bookingNo(), OffsetDateTime.now());
+        PersistedQuery persistedQuery = persistQueryResultInTransaction(binding, queryResult, true);
+        return persistedQuery.binding();
     }
 
     public List<ShippingTrackingBinding> listBindings() {
@@ -70,11 +76,9 @@ public class ShippingTrackingService {
                 .orElseThrow(() -> new IllegalArgumentException("绑定不存在: " + id));
     }
 
-    @Transactional
     public ShippingTrackingBinding syncBinding(long id) {
         ShippingTrackingBinding binding = getBinding(id);
-        queryAndPersist(binding, false, true);
-        return bindingRepository.findById(id).orElseThrow();
+        return syncBindingRecord(binding, true);
     }
 
     @Transactional
@@ -83,56 +87,68 @@ public class ShippingTrackingService {
         bindingRepository.disable(id, OffsetDateTime.now());
     }
 
-    @Transactional
     public void syncBindingForBatch(ShippingTrackingBinding binding) {
-        queryAndPersist(binding, false, true);
+        syncBindingRecord(binding, true);
     }
 
-    private void queryAndPersist(ShippingTrackingBinding binding, boolean baseline, boolean notifyOnChange) {
-        OffsetDateTime now = OffsetDateTime.now();
-        MscTrackingQueryResult queryResult = querySafely(binding.bookingNo(), now);
-        String snapshotStatus = snapshotStatus(queryResult.status());
-        ShippingTrackingSnapshot previousSuccess = "SUCCESS".equals(snapshotStatus)
-                ? snapshotRepository.findLatestSuccess(binding.id()).orElse(null)
-                : null;
-
-        ShippingTrackingSnapshot currentSnapshot = snapshotRepository.insert(
-                binding.id(),
-                queryResult.queryTime(),
-                snapshotStatus,
-                queryResult.events(),
-                queryResult.rawText(),
-                queryResult.eta(),
-                queryResult.latestNode(),
-                queryResult.screenshotPath(),
-                queryResult.errorReason(),
-                baseline,
-                now);
-
-        bindingRepository.updateAfterQuery(
-                binding.id(),
-                snapshotStatus,
-                queryResult.eta(),
-                queryResult.latestNode(),
-                queryResult.queryTime(),
-                now);
-
-        if (baseline || !notifyOnChange || !"SUCCESS".equals(snapshotStatus) || previousSuccess == null) {
-            return;
+    private ShippingTrackingBinding syncBindingRecord(ShippingTrackingBinding binding, boolean notifyOnChange) {
+        MscTrackingQueryResult queryResult = querySafely(binding.bookingNo(), OffsetDateTime.now());
+        PersistedQuery persistedQuery = persistQueryResultInTransaction(binding, queryResult, false);
+        if (notifyOnChange && !persistedQuery.changes().isEmpty()) {
+            sendNotificationAndRecordChange(binding, queryResult, persistedQuery);
         }
+        return persistedQuery.binding();
+    }
 
-        List<ShippingTrackingEventChange> changes = changeDetector.detect(
-                previousSuccess.events(),
-                currentSnapshot.events());
-        if (changes.isEmpty()) {
-            return;
-        }
+    private PersistedQuery persistQueryResultInTransaction(
+            ShippingTrackingBinding binding,
+            MscTrackingQueryResult queryResult,
+            boolean baseline) {
+        return transactionTemplate.execute(status -> {
+            OffsetDateTime now = OffsetDateTime.now();
+            String snapshotStatus = snapshotStatus(queryResult.status());
+            ShippingTrackingSnapshot previousSuccess = "SUCCESS".equals(snapshotStatus)
+                    ? snapshotRepository.findLatestSuccess(binding.id()).orElse(null)
+                    : null;
 
+            ShippingTrackingSnapshot currentSnapshot = snapshotRepository.insert(
+                    binding.id(),
+                    queryResult.queryTime(),
+                    snapshotStatus,
+                    queryResult.events(),
+                    queryResult.rawText(),
+                    queryResult.eta(),
+                    queryResult.latestNode(),
+                    queryResult.screenshotPath(),
+                    queryResult.errorReason(),
+                    baseline,
+                    now);
+
+            bindingRepository.updateAfterQuery(
+                    binding.id(),
+                    snapshotStatus,
+                    queryResult.eta(),
+                    queryResult.latestNode(),
+                    queryResult.queryTime(),
+                    now);
+
+            ShippingTrackingBinding updatedBinding = bindingRepository.findById(binding.id()).orElseThrow();
+            List<ShippingTrackingEventChange> changes = shouldDetectChanges(baseline, snapshotStatus, previousSuccess)
+                    ? changeDetector.detect(previousSuccess.events(), currentSnapshot.events())
+                    : List.of();
+            return new PersistedQuery(updatedBinding, previousSuccess, currentSnapshot, changes);
+        });
+    }
+
+    private void sendNotificationAndRecordChange(
+            ShippingTrackingBinding binding,
+            MscTrackingQueryResult queryResult,
+            PersistedQuery persistedQuery) {
         ShippingTrackingEmailTemplateBuilder.EmailContent email = emailTemplateBuilder.buildChangeNotification(
                 binding,
                 queryResult.eta(),
                 queryResult.latestNode(),
-                changes,
+                persistedQuery.changes(),
                 OffsetDateTime.now());
         boolean emailSent = false;
         OffsetDateTime emailSentTime = null;
@@ -144,18 +160,33 @@ public class ShippingTrackingService {
         } catch (Exception error) {
             log.warn("Failed to send shipping tracking notification for binding {}.", binding.id(), error);
         }
-        OffsetDateTime changeLogTime = OffsetDateTime.now();
-        changeLogRepository.insert(
+        boolean finalEmailSent = emailSent;
+        OffsetDateTime finalEmailSentTime = emailSentTime;
+        transactionTemplate.executeWithoutResult(status -> changeLogRepository.insert(
                 binding.id(),
-                previousSuccess.id(),
-                currentSnapshot.id(),
+                persistedQuery.previousSuccess().id(),
+                persistedQuery.currentSnapshot().id(),
                 "EVENTS_CHANGED",
-                "检测到 " + changes.size() + " 条物流事件变化",
-                toJson(changes.stream().map(ShippingTrackingEventChange::beforeEvent).toList()),
-                toJson(changes.stream().map(ShippingTrackingEventChange::afterEvent).toList()),
-                emailSent,
-                emailSentTime,
-                changeLogTime);
+                "检测到 " + persistedQuery.changes().size() + " 条物流事件变化",
+                toJson(persistedQuery.changes().stream().map(ShippingTrackingEventChange::beforeEvent).toList()),
+                toJson(persistedQuery.changes().stream().map(ShippingTrackingEventChange::afterEvent).toList()),
+                finalEmailSent,
+                finalEmailSentTime,
+                OffsetDateTime.now()));
+    }
+
+    private static boolean shouldDetectChanges(
+            boolean baseline,
+            String snapshotStatus,
+            ShippingTrackingSnapshot previousSuccess) {
+        return !baseline && "SUCCESS".equals(snapshotStatus) && previousSuccess != null;
+    }
+
+    private record PersistedQuery(
+            ShippingTrackingBinding binding,
+            ShippingTrackingSnapshot previousSuccess,
+            ShippingTrackingSnapshot currentSnapshot,
+            List<ShippingTrackingEventChange> changes) {
     }
 
     private MscTrackingQueryResult querySafely(String bookingNo, OffsetDateTime fallbackTime) {
