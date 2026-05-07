@@ -1,6 +1,7 @@
 package com.example.myaiproject.shipping.repo;
 
 import com.example.myaiproject.shipping.model.ShippingTrackingBinding;
+import com.example.myaiproject.shipping.support.ShippingTrackingFieldSanitizer;
 import java.sql.PreparedStatement;
 import java.sql.Statement;
 import java.time.OffsetDateTime;
@@ -65,11 +66,14 @@ public class ShippingTrackingBindingRepository {
             String latestNode,
             OffsetDateTime queryTime,
             OffsetDateTime now) {
+        String safeStatus = ShippingTrackingFieldSanitizer.truncate(status, ShippingTrackingFieldSanitizer.STATUS_MAX_LENGTH);
+        String safeEta = ShippingTrackingFieldSanitizer.truncate(eta, ShippingTrackingFieldSanitizer.ETA_MAX_LENGTH);
+        String safeLatestNode = ShippingTrackingFieldSanitizer.truncate(latestNode, ShippingTrackingFieldSanitizer.LATEST_NODE_MAX_LENGTH);
         jdbcTemplate.update("""
                 update shipping_tracking_binding
                 set last_status = ?, last_eta = ?, last_node = ?, last_query_time = ?, updated_at = ?
                 where id = ?
-                """, status, emptyToNull(eta), emptyToNull(latestNode), queryTime, now, id);
+                """, safeStatus, emptyToNull(safeEta), emptyToNull(safeLatestNode), queryTime, now, id);
     }
 
     public void disable(long id, OffsetDateTime now) {

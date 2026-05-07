@@ -1,6 +1,7 @@
 package com.example.myaiproject.shipping;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -224,6 +225,87 @@ class ShippingTrackingMvpTest {
     }
 
     @Test
+    void createBindingPersistsFailedSnapshotWhenMscClientReturnsLongErrorReason() {
+        String longErrorReason = "Playwright dependency missing\n" + "x".repeat(5_000);
+        fakeClient.enqueue(failed(longErrorReason));
+
+        ShippingTrackingBinding binding = assertDoesNotThrow(
+                () -> service.createBinding("ORD-LONG-ERROR", "177C1234498"));
+
+        assertNotNull(binding.id());
+        assertEquals("FAILED", binding.lastStatus());
+        assertNotNull(binding.lastQueryTime());
+        assertEquals(1, count("shipping_tracking_binding"));
+        assertEquals(1, count("shipping_tracking_snapshot"));
+        assertEquals("FAILED", jdbcTemplate.queryForObject(
+                "select status from shipping_tracking_snapshot where binding_id = ?",
+                String.class,
+                binding.id()));
+        assertTrue(jdbcTemplate.queryForObject(
+                "select length(error_reason) from shipping_tracking_snapshot where binding_id = ?",
+                Integer.class,
+                binding.id()) <= 2048);
+        assertTrue(jdbcTemplate.queryForObject(
+                "select length(eta) from shipping_tracking_snapshot where binding_id = ?",
+                Integer.class,
+                binding.id()) <= 64);
+        assertTrue(jdbcTemplate.queryForObject(
+                "select length(latest_node) from shipping_tracking_snapshot where binding_id = ?",
+                Integer.class,
+                binding.id()) <= 255);
+        assertTrue(jdbcTemplate.queryForObject(
+                "select length(screenshot_path) from shipping_tracking_snapshot where binding_id = ?",
+                Integer.class,
+                binding.id()) <= 500);
+        assertEquals(0, count("shipping_tracking_change_log"));
+        assertEquals(0, notificationSender.sentMessages.size());
+    }
+
+    @Test
+    void baselineQueryFailureReturnsBindingAndDoesNotCreateChangeLogOrEmail() throws Exception {
+        fakeClient.enqueueFailure(new IllegalStateException("Playwright failed\n" + "x".repeat(5_000)));
+
+        mockMvc.perform(post("/api/shipping-tracking/bindings")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"orderNo\":\"ORD-BASELINE-FAILED\",\"bookingNo\":\"177CBASE001\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").isNumber())
+                .andExpect(jsonPath("$.orderNo").value("ORD-BASELINE-FAILED"))
+                .andExpect(jsonPath("$.bookingNo").value("177CBASE001"))
+                .andExpect(jsonPath("$.carrier").value("MSC"))
+                .andExpect(jsonPath("$.enabled").value(true))
+                .andExpect(jsonPath("$.lastStatus").value("FAILED"))
+                .andExpect(jsonPath("$.lastQueryTime").isNotEmpty());
+
+        assertEquals(1, count("shipping_tracking_binding"));
+        assertEquals(1, count("shipping_tracking_snapshot"));
+        assertEquals("FAILED", jdbcTemplate.queryForObject(
+                "select status from shipping_tracking_snapshot",
+                String.class));
+        assertEquals(0, count("shipping_tracking_change_log"));
+        assertEquals(0, notificationSender.sentMessages.size());
+    }
+
+    @Test
+    void syncQueryFailureSavesFailedSnapshotWithoutChangeLogOrEmail() {
+        fakeClient.enqueue(success(List.of(event("18/05/2026", "Ningbo, CN", "Loaded", "MSC A"))));
+        ShippingTrackingBinding binding = service.createBinding("ORD-SYNC-FAILED", "177C1234498");
+        fakeClient.enqueue(failed("Browser closed\n" + "x".repeat(5_000)));
+
+        ShippingTrackingBinding synced = assertDoesNotThrow(() -> service.syncBinding(binding.id()));
+
+        assertEquals(binding.id(), synced.id());
+        assertEquals("FAILED", synced.lastStatus());
+        assertEquals(2, count("shipping_tracking_snapshot"));
+        assertEquals(1, countWhere("shipping_tracking_snapshot", "status = 'FAILED'"));
+        assertTrue(jdbcTemplate.queryForObject(
+                "select length(error_reason) from shipping_tracking_snapshot where status = 'FAILED'",
+                Integer.class) <= 2048);
+        assertEquals(0, count("shipping_tracking_change_log"));
+        assertEquals(0, notificationSender.sentMessages.size());
+    }
+
+    @Test
     void scheduledJobContinuesWhenOneBindingFails() {
         fakeClient.enqueue(success(List.of(event("18/05/2026", "Ningbo, CN", "Loaded", "MSC A"))));
         ShippingTrackingBinding first = service.createBinding("ORD-005", "177C1234498");
@@ -358,6 +440,19 @@ class ShippingTrackingMvpTest {
                 List.of(),
                 "/tmp/no-result.png",
                 "MSC page returned no visible result for this booking number.",
+                OffsetDateTime.now());
+    }
+
+    private static MscTrackingQueryResult failed(String errorReason) {
+        return new MscTrackingQueryResult(
+                MscTrackingStatus.FAILED,
+                "",
+                "",
+                "x".repeat(200),
+                "x".repeat(600),
+                List.of(),
+                "/tmp/" + "x".repeat(1_500) + ".png",
+                errorReason,
                 OffsetDateTime.now());
     }
 

@@ -2,6 +2,7 @@ package com.example.myaiproject.shipping.repo;
 
 import com.example.myaiproject.shipping.model.ShippingTrackingEvent;
 import com.example.myaiproject.shipping.model.ShippingTrackingSnapshot;
+import com.example.myaiproject.shipping.support.ShippingTrackingFieldSanitizer;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.sql.PreparedStatement;
@@ -41,6 +42,11 @@ public class ShippingTrackingSnapshotRepository {
             boolean baseline,
             OffsetDateTime now) {
         String eventsJson = toJson(events == null ? List.of() : events);
+        String safeStatus = ShippingTrackingFieldSanitizer.truncate(status, ShippingTrackingFieldSanitizer.STATUS_MAX_LENGTH);
+        String safeEta = ShippingTrackingFieldSanitizer.truncate(eta, ShippingTrackingFieldSanitizer.ETA_MAX_LENGTH);
+        String safeLatestNode = ShippingTrackingFieldSanitizer.truncate(latestNode, ShippingTrackingFieldSanitizer.LATEST_NODE_MAX_LENGTH);
+        String safeScreenshotPath = ShippingTrackingFieldSanitizer.truncate(screenshotPath, ShippingTrackingFieldSanitizer.SCREENSHOT_PATH_MAX_LENGTH);
+        String safeErrorReason = ShippingTrackingFieldSanitizer.truncate(errorReason, ShippingTrackingFieldSanitizer.ERROR_REASON_MAX_LENGTH);
         KeyHolder keyHolder = new GeneratedKeyHolder();
         jdbcTemplate.update(connection -> {
             PreparedStatement statement = connection.prepareStatement("""
@@ -51,13 +57,13 @@ public class ShippingTrackingSnapshotRepository {
                     """, Statement.RETURN_GENERATED_KEYS);
             statement.setLong(1, bindingId);
             statement.setObject(2, queryTime);
-            statement.setString(3, status);
+            statement.setString(3, safeStatus);
             statement.setString(4, eventsJson);
             statement.setString(5, rawText);
-            statement.setString(6, emptyToNull(eta));
-            statement.setString(7, emptyToNull(latestNode));
-            statement.setString(8, emptyToNull(screenshotPath));
-            statement.setString(9, emptyToNull(errorReason));
+            statement.setString(6, emptyToNull(safeEta));
+            statement.setString(7, emptyToNull(safeLatestNode));
+            statement.setString(8, emptyToNull(safeScreenshotPath));
+            statement.setString(9, emptyToNull(safeErrorReason));
             statement.setBoolean(10, baseline);
             statement.setObject(11, now);
             return statement;
