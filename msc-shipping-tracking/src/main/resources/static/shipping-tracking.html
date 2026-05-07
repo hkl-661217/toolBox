@@ -1,0 +1,680 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MSC 物流变更提醒</title>
+  <style>
+    :root {
+      --bg: #f3f5f8;
+      --card: #ffffff;
+      --ink: #172033;
+      --muted: #64748b;
+      --line: #e2e8f0;
+      --line-strong: #cbd5e1;
+      --navy: #12345b;
+      --navy-soft: #e8eef6;
+      --gold: #b78b28;
+      --gold-soft: #fff7df;
+      --green: #157347;
+      --green-soft: #e8f6ef;
+      --red: #b42318;
+      --red-soft: #fdecec;
+      --yellow: #9a6700;
+      --yellow-soft: #fff4cf;
+      --slate-soft: #eef2f7;
+      --shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--ink);
+      background:
+        linear-gradient(180deg, #eef3f8 0, var(--bg) 260px),
+        var(--bg);
+    }
+
+    main {
+      width: min(1180px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 34px 0 46px;
+    }
+
+    .page-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+      align-items: flex-start;
+      margin-bottom: 20px;
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--gold);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    h1 {
+      margin: 0;
+      color: var(--navy);
+      font-size: clamp(28px, 4vw, 40px);
+      line-height: 1.12;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      max-width: 760px;
+      margin: 12px 0 0;
+      color: #475569;
+      font-size: 15px;
+      line-height: 1.7;
+    }
+
+    .version-pill {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 8px 12px;
+      border: 1px solid rgba(183, 139, 40, 0.38);
+      border-radius: 999px;
+      color: #735614;
+      background: rgba(255, 247, 223, 0.72);
+      font-size: 13px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .section {
+      margin-top: 18px;
+    }
+
+    .card {
+      border: 1px solid rgba(226, 232, 240, 0.9);
+      border-radius: 12px;
+      background: var(--card);
+      box-shadow: var(--shadow);
+    }
+
+    .summary-card {
+      display: grid;
+      grid-template-columns: 6px 1fr;
+      overflow: hidden;
+      border-color: rgba(183, 139, 40, 0.25);
+      background: linear-gradient(135deg, #ffffff 0, #fffaf0 100%);
+    }
+
+    .summary-card::before {
+      content: "";
+      display: block;
+      background: var(--gold);
+    }
+
+    .summary-content {
+      padding: 18px 20px;
+    }
+
+    .section-title {
+      margin: 0;
+      color: var(--navy);
+      font-size: 18px;
+      line-height: 1.35;
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+
+    .section-note {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .metric-card {
+      padding: 16px;
+      min-height: 116px;
+      border-left: 4px solid var(--navy);
+    }
+
+    .metric-card.success {
+      border-left-color: var(--green);
+    }
+
+    .metric-card.warning {
+      border-left-color: var(--gold);
+    }
+
+    .metric-label {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .metric-value {
+      margin: 10px 0 4px;
+      color: var(--navy);
+      font-size: 30px;
+      line-height: 1;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .metric-help {
+      margin: 0;
+      color: #64748b;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .input-card,
+    .table-card {
+      padding: 20px;
+    }
+
+    .card-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: flex-start;
+      margin-bottom: 16px;
+    }
+
+    form {
+      display: grid;
+      grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) auto;
+      gap: 12px;
+      align-items: end;
+    }
+
+    label {
+      display: grid;
+      gap: 7px;
+      color: #334155;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    input {
+      height: 42px;
+      width: 100%;
+      border: 1px solid var(--line-strong);
+      border-radius: 8px;
+      padding: 0 12px;
+      color: var(--ink);
+      background: #fff;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    input:focus {
+      border-color: var(--navy);
+      box-shadow: 0 0 0 3px rgba(18, 52, 91, 0.12);
+    }
+
+    button {
+      min-height: 38px;
+      border: 0;
+      border-radius: 8px;
+      padding: 0 14px;
+      color: #fff;
+      background: var(--navy);
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    button:hover {
+      filter: brightness(0.96);
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.48;
+    }
+
+    button.secondary {
+      min-height: 32px;
+      border: 1px solid #cbd5e1;
+      color: #17324f;
+      background: #f8fafc;
+      font-size: 13px;
+    }
+
+    button.danger {
+      border-color: #efc7c4;
+      color: var(--red);
+      background: #fff6f5;
+      margin-left: 6px;
+    }
+
+    #message {
+      min-height: 24px;
+      margin-top: 14px;
+      color: #334155;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    #message.error {
+      color: var(--red);
+    }
+
+    #message.success {
+      color: var(--green);
+    }
+
+    .table-wrap {
+      width: 100%;
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+    }
+
+    table {
+      width: 100%;
+      min-width: 980px;
+      border-collapse: collapse;
+      background: #fff;
+    }
+
+    th,
+    td {
+      border-bottom: 1px solid var(--line);
+      padding: 12px 12px;
+      text-align: left;
+      font-size: 13px;
+      line-height: 1.5;
+      vertical-align: middle;
+    }
+
+    th {
+      color: #334155;
+      background: #f1f5f9;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    tbody tr:last-child td {
+      border-bottom: 0;
+    }
+
+    tbody tr:hover {
+      background: #fbfdff;
+    }
+
+    .mono {
+      font-variant-numeric: tabular-nums;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 24px;
+      padding: 3px 9px;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1;
+      white-space: nowrap;
+    }
+
+    .badge-success {
+      color: var(--green);
+      border-color: rgba(21, 115, 71, 0.16);
+      background: var(--green-soft);
+    }
+
+    .badge-gray {
+      color: #475569;
+      border-color: #d8dee8;
+      background: var(--slate-soft);
+    }
+
+    .badge-danger {
+      color: var(--red);
+      border-color: rgba(180, 35, 24, 0.14);
+      background: var(--red-soft);
+    }
+
+    .badge-warning {
+      color: var(--yellow);
+      border-color: rgba(154, 103, 0, 0.16);
+      background: var(--yellow-soft);
+    }
+
+    .badge-pending {
+      color: #38546d;
+      border-color: #d4dee9;
+      background: #edf3f8;
+    }
+
+    .empty-state {
+      padding: 28px 12px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
+
+    @media (max-width: 900px) {
+      .page-header,
+      .card-head {
+        display: block;
+      }
+
+      .version-pill {
+        margin-top: 14px;
+      }
+
+      .metrics-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      form {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 560px) {
+      main {
+        width: min(100% - 24px, 1180px);
+        padding: 24px 0 34px;
+      }
+
+      .metrics-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .input-card,
+      .table-card {
+        padding: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">物流状态看板</p>
+      <h1>MSC 物流变更提醒</h1>
+      <p class="subtitle">绑定订单号和 MSC 订舱号后，系统每日查询物流状态；只有 ETA、ETD 或物流节点发生变化时才邮件通知。</p>
+    </div>
+    <div class="version-pill">当前版本：MVP / 仅支持 MSC 订舱号</div>
+  </header>
+
+  <section class="section card summary-card" aria-labelledby="summaryTitle">
+    <div class="summary-content">
+      <h2 class="section-title" id="summaryTitle">当前一句话结论</h2>
+      <p class="section-note">首次查询只建立物流基线，不打扰用户；后续只有实际变化才发送提醒。</p>
+    </div>
+  </section>
+
+  <section class="section metrics-grid" aria-label="当前概览">
+    <article class="card metric-card">
+      <p class="metric-label">当前绑定数</p>
+      <p class="metric-value" id="metricTotal">0</p>
+      <p class="metric-help">订单号与订舱号一对一绑定</p>
+    </article>
+    <article class="card metric-card success">
+      <p class="metric-label">启用中</p>
+      <p class="metric-value" id="metricEnabled">0</p>
+      <p class="metric-help">参与每日定时查询</p>
+    </article>
+    <article class="card metric-card success">
+      <p class="metric-label">查询成功</p>
+      <p class="metric-value" id="metricSuccess">0</p>
+      <p class="metric-help">最近一次状态为 SUCCESS</p>
+    </article>
+    <article class="card metric-card warning">
+      <p class="metric-label">异常 / 未查询</p>
+      <p class="metric-value" id="metricException">0</p>
+      <p class="metric-help">FAILED、NO_RESULT、人工确认或暂无状态</p>
+    </article>
+  </section>
+
+  <section class="section card input-card" aria-labelledby="createTitle">
+    <div class="card-head">
+      <div>
+        <h2 class="section-title" id="createTitle">新增绑定</h2>
+        <p class="section-note">输入订单号和订舱号后，系统会立即查询一次 MSC 并保存当前快照，作为后续变化比对基线。</p>
+      </div>
+    </div>
+    <form id="bindingForm">
+      <label>订单号
+        <input id="orderNo" name="orderNo" autocomplete="off" required>
+      </label>
+      <label>订舱号
+        <input id="bookingNo" name="bookingNo" autocomplete="off" required>
+      </label>
+      <button type="submit">保存并建立绑定</button>
+    </form>
+    <div id="message" role="status" aria-live="polite"></div>
+  </section>
+
+  <section class="section card table-card" aria-labelledby="listTitle">
+    <div class="card-head">
+      <div>
+        <h2 class="section-title" id="listTitle">订单订舱绑定列表</h2>
+        <p class="section-note">手动同步用于本地验收或紧急刷新；停用后该绑定不会继续参与定时查询。</p>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+        <tr>
+          <th>订单号</th>
+          <th>订舱号</th>
+          <th>船公司</th>
+          <th>启用状态</th>
+          <th>最新状态</th>
+          <th>ETA</th>
+          <th>最新节点</th>
+          <th>最后查询时间</th>
+          <th>操作</th>
+        </tr>
+        </thead>
+        <tbody id="bindingsBody">
+        <tr>
+          <td colspan="9" class="empty-state">正在读取绑定列表...</td>
+        </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+<script>
+  const form = document.getElementById('bindingForm');
+  const message = document.getElementById('message');
+  const body = document.getElementById('bindingsBody');
+  const metrics = {
+    total: document.getElementById('metricTotal'),
+    enabled: document.getElementById('metricEnabled'),
+    success: document.getElementById('metricSuccess'),
+    exception: document.getElementById('metricException')
+  };
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    setMessage('保存并建立首次物流基线中...', '');
+    const payload = {
+      orderNo: document.getElementById('orderNo').value.trim(),
+      bookingNo: document.getElementById('bookingNo').value.trim()
+    };
+    try {
+      const response = await fetch('/api/shipping-tracking/bindings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!response.ok) {
+        setMessage('操作失败，请查看后端日志。', 'error');
+        return;
+      }
+      form.reset();
+      setMessage('绑定创建成功，已生成首次物流基线。', 'success');
+      await loadBindings();
+    } catch (error) {
+      setMessage('操作失败，请查看后端日志。', 'error');
+    }
+  });
+
+  async function loadBindings() {
+    try {
+      const response = await fetch('/api/shipping-tracking/bindings');
+      if (!response.ok) {
+        throw new Error('Failed to load bindings');
+      }
+      const rows = await response.json();
+      updateMetrics(rows);
+      renderBindings(rows);
+    } catch (error) {
+      body.innerHTML = '<tr><td colspan="9" class="empty-state">绑定列表读取失败，请查看后端日志。</td></tr>';
+      updateMetrics([]);
+    }
+  }
+
+  function updateMetrics(rows) {
+    const total = rows.length;
+    const enabled = rows.filter(row => row.enabled === true).length;
+    const success = rows.filter(row => row.lastStatus === 'SUCCESS').length;
+    const exception = rows.filter(row => row.lastStatus !== 'SUCCESS').length;
+    metrics.total.textContent = total;
+    metrics.enabled.textContent = enabled;
+    metrics.success.textContent = success;
+    metrics.exception.textContent = exception;
+  }
+
+  function renderBindings(rows) {
+    if (!rows.length) {
+      body.innerHTML = '<tr><td colspan="9" class="empty-state">暂无绑定。先新增一条订单号与订舱号关系。</td></tr>';
+      return;
+    }
+    body.innerHTML = rows.map(row => `
+      <tr>
+        <td>${textCell(row.orderNo)}</td>
+        <td class="mono">${textCell(row.bookingNo)}</td>
+        <td>${textCell(row.carrier || 'MSC')}</td>
+        <td>${enabledBadge(row.enabled)}</td>
+        <td>${statusBadge(row.lastStatus)}</td>
+        <td class="mono">${textCell(row.lastEta)}</td>
+        <td>${textCell(row.lastNode)}</td>
+        <td class="mono">${textCell(row.lastQueryTime)}</td>
+        <td>
+          <div class="actions">
+            <button class="secondary" onclick="syncBinding(${row.id})">手动同步</button>
+            <button class="secondary danger" onclick="disableBinding(${row.id})" ${row.enabled === false ? 'disabled' : ''}>停用</button>
+          </div>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  async function syncBinding(id) {
+    setMessage('同步中...', '');
+    try {
+      const response = await fetch(`/api/shipping-tracking/bindings/${id}/sync`, { method: 'POST' });
+      if (!response.ok) {
+        setMessage('操作失败，请查看后端日志。', 'error');
+        return;
+      }
+      setMessage('同步完成；如物流信息无变化，不会发送邮件。', 'success');
+      await loadBindings();
+    } catch (error) {
+      setMessage('操作失败，请查看后端日志。', 'error');
+    }
+  }
+
+  async function disableBinding(id) {
+    setMessage('停用中...', '');
+    try {
+      const response = await fetch(`/api/shipping-tracking/bindings/${id}/disable`, { method: 'POST' });
+      if (!response.ok) {
+        setMessage('操作失败，请查看后端日志。', 'error');
+        return;
+      }
+      setMessage('绑定已停用，后续定时任务不会继续查询。', 'success');
+      await loadBindings();
+    } catch (error) {
+      setMessage('操作失败，请查看后端日志。', 'error');
+    }
+  }
+
+  function enabledBadge(enabled) {
+    return enabled === false
+      ? '<span class="badge badge-gray">已停用</span>'
+      : '<span class="badge badge-success">启用中</span>';
+  }
+
+  function statusBadge(status) {
+    const value = status || 'PENDING';
+    const labels = {
+      SUCCESS: 'SUCCESS',
+      NO_RESULT: 'NO_RESULT',
+      FAILED: 'FAILED',
+      MANUAL_REQUIRED: 'MANUAL_REQUIRED',
+      PENDING: 'PENDING'
+    };
+    const classes = {
+      SUCCESS: 'badge-success',
+      NO_RESULT: 'badge-gray',
+      FAILED: 'badge-danger',
+      MANUAL_REQUIRED: 'badge-warning',
+      PENDING: 'badge-pending'
+    };
+    const key = labels[value] ? value : 'PENDING';
+    return `<span class="badge ${classes[key]}">${labels[key]}</span>`;
+  }
+
+  function textCell(value) {
+    if (value === null || value === undefined || value === '') {
+      return '<span class="muted">-</span>';
+    }
+    return escapeHtml(value);
+  }
+
+  function setMessage(text, type) {
+    message.textContent = text;
+    message.className = type || '';
+  }
+
+  function escapeHtml(value) {
+    return String(value)
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#039;');
+  }
+
+  loadBindings();
+</script>
+</body>
+</html>

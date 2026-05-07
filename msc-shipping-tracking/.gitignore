@@ -1,0 +1,13 @@
+.DS_Store
+target/
+data/msc-tracking/
+data/shipping-tracking/
+*.log
+*.xlsx
+*.json
+*.db
+*.mv.db
+*.trace.db
+screenshots/
+.env
+*.env

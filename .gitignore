@@ -15,3 +15,4 @@ frontend/dist/
 
 # Local runtime files
 backend.log
+.codex-temp/
