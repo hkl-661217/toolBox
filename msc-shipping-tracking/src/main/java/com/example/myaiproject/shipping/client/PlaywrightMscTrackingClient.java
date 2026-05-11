@@ -23,7 +23,7 @@ public class PlaywrightMscTrackingClient implements MscTrackingClient {
 
     @Override
     public MscTrackingQueryResult queryBooking(String bookingNo) {
-        try (MscBrowserTracker tracker = new MscBrowserTracker()) {
+        try (MscBrowserTracker tracker = new MscBrowserTracker(properties.getChromiumLaunchTimeoutMs())) {
             MscTrackingResult result = tracker.query(
                     bookingNo,
                     MscTrackingQueryType.BOOKING,

@@ -12,6 +12,7 @@ public class ShippingTrackingProperties {
     private int delayMinSeconds = 10;
     private int delayMaxSeconds = 20;
     private String screenshotsDir = "data/shipping-tracking/screenshots";
+    private long chromiumLaunchTimeoutMs = 180_000L;
 
     public String getNotifyEmails() {
         return notifyEmails;
@@ -59,6 +60,14 @@ public class ShippingTrackingProperties {
 
     public void setScreenshotsDir(String screenshotsDir) {
         this.screenshotsDir = screenshotsDir;
+    }
+
+    public long getChromiumLaunchTimeoutMs() {
+        return chromiumLaunchTimeoutMs;
+    }
+
+    public void setChromiumLaunchTimeoutMs(long chromiumLaunchTimeoutMs) {
+        this.chromiumLaunchTimeoutMs = chromiumLaunchTimeoutMs;
     }
 
     public List<String> notifyEmailList() {

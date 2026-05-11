@@ -21,6 +21,7 @@ import org.slf4j.LoggerFactory;
 
 public class MscBrowserTracker implements AutoCloseable {
     public static final String TRACKING_URL = "https://www.msccargo.cn/zh/track-a-shipment";
+    public static final long DEFAULT_CHROMIUM_LAUNCH_TIMEOUT_MS = 180_000L;
     private static final Logger LOGGER = LoggerFactory.getLogger(MscBrowserTracker.class);
     private static final double PAGE_NAVIGATION_TIMEOUT_MS = 120_000;
     private static final long PAGE_READY_TIMEOUT_MS = 75_000;
@@ -31,8 +32,15 @@ public class MscBrowserTracker implements AutoCloseable {
     private final MscTrackingTextParser textParser = new MscTrackingTextParser();
 
     public MscBrowserTracker() {
+        this(DEFAULT_CHROMIUM_LAUNCH_TIMEOUT_MS);
+    }
+
+    public MscBrowserTracker(long chromiumLaunchTimeoutMs) {
+        if (chromiumLaunchTimeoutMs <= 0) {
+            throw new IllegalArgumentException("chromiumLaunchTimeoutMs must be positive, got " + chromiumLaunchTimeoutMs);
+        }
         this.playwright = Playwright.create();
-        this.browser = launchVisibleBrowser(playwright);
+        this.browser = launchVisibleBrowser(playwright, chromiumLaunchTimeoutMs);
         this.context = browser.newContext(new Browser.NewContextOptions()
                 .setLocale("zh-CN")
                 .setViewportSize(1440, 1000));
@@ -165,19 +173,25 @@ public class MscBrowserTracker implements AutoCloseable {
         playwright.close();
     }
 
-    private static Browser launchVisibleBrowser(Playwright playwright) {
-        BrowserType.LaunchOptions chromeOptions = new BrowserType.LaunchOptions()
+    private static Browser launchVisibleBrowser(Playwright playwright, long launchTimeoutMs) {
+        try {
+            return playwright.chromium().launch(buildChromeLaunchOptions(launchTimeoutMs));
+        } catch (RuntimeException chromeError) {
+            return playwright.chromium().launch(buildChromiumLaunchOptions(launchTimeoutMs));
+        }
+    }
+
+    static BrowserType.LaunchOptions buildChromeLaunchOptions(long launchTimeoutMs) {
+        return new BrowserType.LaunchOptions()
                 .setHeadless(false)
                 .setChannel("chrome")
-                .setTimeout(60_000);
-        try {
-            return playwright.chromium().launch(chromeOptions);
-        } catch (RuntimeException chromeError) {
-            BrowserType.LaunchOptions chromiumOptions = new BrowserType.LaunchOptions()
-                    .setHeadless(false)
-                    .setTimeout(60_000);
-            return playwright.chromium().launch(chromiumOptions);
-        }
+                .setTimeout(launchTimeoutMs);
+    }
+
+    static BrowserType.LaunchOptions buildChromiumLaunchOptions(long launchTimeoutMs) {
+        return new BrowserType.LaunchOptions()
+                .setHeadless(false)
+                .setTimeout(launchTimeoutMs);
     }
 
     private static void navigateToTrackingPage(Page page) {
