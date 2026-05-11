@@ -17,7 +17,7 @@ public class ShippingTrackingProperties {
     private boolean chromiumStealthEnabled = true;
     private String client = "curl-impersonate";
     private String pythonExecutable = "python3";
-    private String pythonScriptPath = "msc-shipping-tracking/scripts/msc_tracking_query.py";
+    private String pythonScriptPath = "scripts/msc_tracking_query.py";
     private long curlImpersonateTimeoutMs = 90_000L;
 
     public String getNotifyEmails() {
