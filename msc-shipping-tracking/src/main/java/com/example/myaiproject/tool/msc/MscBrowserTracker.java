@@ -32,15 +32,19 @@ public class MscBrowserTracker implements AutoCloseable {
     private final MscTrackingTextParser textParser = new MscTrackingTextParser();
 
     public MscBrowserTracker() {
-        this(DEFAULT_CHROMIUM_LAUNCH_TIMEOUT_MS);
+        this(DEFAULT_CHROMIUM_LAUNCH_TIMEOUT_MS, false);
     }
 
     public MscBrowserTracker(long chromiumLaunchTimeoutMs) {
+        this(chromiumLaunchTimeoutMs, true);
+    }
+
+    public MscBrowserTracker(long chromiumLaunchTimeoutMs, boolean headless) {
         if (chromiumLaunchTimeoutMs <= 0) {
             throw new IllegalArgumentException("chromiumLaunchTimeoutMs must be positive, got " + chromiumLaunchTimeoutMs);
         }
         this.playwright = Playwright.create();
-        this.browser = launchVisibleBrowser(playwright, chromiumLaunchTimeoutMs);
+        this.browser = launchBrowser(playwright, chromiumLaunchTimeoutMs, headless);
         this.context = browser.newContext(new Browser.NewContextOptions()
                 .setLocale("zh-CN")
                 .setViewportSize(1440, 1000));
@@ -173,24 +177,24 @@ public class MscBrowserTracker implements AutoCloseable {
         playwright.close();
     }
 
-    private static Browser launchVisibleBrowser(Playwright playwright, long launchTimeoutMs) {
+    private static Browser launchBrowser(Playwright playwright, long launchTimeoutMs, boolean headless) {
         try {
-            return playwright.chromium().launch(buildChromeLaunchOptions(launchTimeoutMs));
+            return playwright.chromium().launch(buildChromeLaunchOptions(launchTimeoutMs, headless));
         } catch (RuntimeException chromeError) {
-            return playwright.chromium().launch(buildChromiumLaunchOptions(launchTimeoutMs));
+            return playwright.chromium().launch(buildChromiumLaunchOptions(launchTimeoutMs, headless));
         }
     }
 
-    static BrowserType.LaunchOptions buildChromeLaunchOptions(long launchTimeoutMs) {
+    static BrowserType.LaunchOptions buildChromeLaunchOptions(long launchTimeoutMs, boolean headless) {
         return new BrowserType.LaunchOptions()
-                .setHeadless(false)
+                .setHeadless(headless)
                 .setChannel("chrome")
                 .setTimeout(launchTimeoutMs);
     }
 
-    static BrowserType.LaunchOptions buildChromiumLaunchOptions(long launchTimeoutMs) {
+    static BrowserType.LaunchOptions buildChromiumLaunchOptions(long launchTimeoutMs, boolean headless) {
         return new BrowserType.LaunchOptions()
-                .setHeadless(false)
+                .setHeadless(headless)
                 .setTimeout(launchTimeoutMs);
     }
 

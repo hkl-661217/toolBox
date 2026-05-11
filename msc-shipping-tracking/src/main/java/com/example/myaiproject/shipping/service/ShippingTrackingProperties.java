@@ -13,6 +13,7 @@ public class ShippingTrackingProperties {
     private int delayMaxSeconds = 20;
     private String screenshotsDir = "data/shipping-tracking/screenshots";
     private long chromiumLaunchTimeoutMs = 180_000L;
+    private boolean chromiumHeadless = true;
 
     public String getNotifyEmails() {
         return notifyEmails;
@@ -68,6 +69,14 @@ public class ShippingTrackingProperties {
 
     public void setChromiumLaunchTimeoutMs(long chromiumLaunchTimeoutMs) {
         this.chromiumLaunchTimeoutMs = chromiumLaunchTimeoutMs;
+    }
+
+    public boolean isChromiumHeadless() {
+        return chromiumHeadless;
+    }
+
+    public void setChromiumHeadless(boolean chromiumHeadless) {
+        this.chromiumHeadless = chromiumHeadless;
     }
 
     public List<String> notifyEmailList() {
