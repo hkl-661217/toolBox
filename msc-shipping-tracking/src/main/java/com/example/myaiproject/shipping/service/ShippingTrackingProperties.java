@@ -15,6 +15,10 @@ public class ShippingTrackingProperties {
     private long chromiumLaunchTimeoutMs = 180_000L;
     private boolean chromiumHeadless = true;
     private boolean chromiumStealthEnabled = true;
+    private String client = "curl-impersonate";
+    private String pythonExecutable = "python3";
+    private String pythonScriptPath = "msc-shipping-tracking/scripts/msc_tracking_query.py";
+    private long curlImpersonateTimeoutMs = 90_000L;
 
     public String getNotifyEmails() {
         return notifyEmails;
@@ -86,6 +90,38 @@ public class ShippingTrackingProperties {
 
     public void setChromiumStealthEnabled(boolean chromiumStealthEnabled) {
         this.chromiumStealthEnabled = chromiumStealthEnabled;
+    }
+
+    public String getClient() {
+        return client;
+    }
+
+    public void setClient(String client) {
+        this.client = client;
+    }
+
+    public String getPythonExecutable() {
+        return pythonExecutable;
+    }
+
+    public void setPythonExecutable(String pythonExecutable) {
+        this.pythonExecutable = pythonExecutable;
+    }
+
+    public String getPythonScriptPath() {
+        return pythonScriptPath;
+    }
+
+    public void setPythonScriptPath(String pythonScriptPath) {
+        this.pythonScriptPath = pythonScriptPath;
+    }
+
+    public long getCurlImpersonateTimeoutMs() {
+        return curlImpersonateTimeoutMs;
+    }
+
+    public void setCurlImpersonateTimeoutMs(long curlImpersonateTimeoutMs) {
+        this.curlImpersonateTimeoutMs = curlImpersonateTimeoutMs;
     }
 
     public List<String> notifyEmailList() {

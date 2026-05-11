@@ -9,9 +9,11 @@ import com.example.myaiproject.tool.msc.MscTrackingResult;
 import java.nio.file.Path;
 import java.time.OffsetDateTime;
 import java.util.List;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 @Component
+@ConditionalOnProperty(name = "shipping.tracking.client", havingValue = "playwright")
 public class PlaywrightMscTrackingClient implements MscTrackingClient {
     private final MscTrackingEventParser eventParser;
     private final ShippingTrackingProperties properties;
