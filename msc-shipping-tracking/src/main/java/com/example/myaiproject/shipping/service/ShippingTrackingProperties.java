@@ -14,6 +14,7 @@ public class ShippingTrackingProperties {
     private String screenshotsDir = "data/shipping-tracking/screenshots";
     private long chromiumLaunchTimeoutMs = 180_000L;
     private boolean chromiumHeadless = true;
+    private boolean chromiumStealthEnabled = true;
 
     public String getNotifyEmails() {
         return notifyEmails;
@@ -77,6 +78,14 @@ public class ShippingTrackingProperties {
 
     public void setChromiumHeadless(boolean chromiumHeadless) {
         this.chromiumHeadless = chromiumHeadless;
+    }
+
+    public boolean isChromiumStealthEnabled() {
+        return chromiumStealthEnabled;
+    }
+
+    public void setChromiumStealthEnabled(boolean chromiumStealthEnabled) {
+        this.chromiumStealthEnabled = chromiumStealthEnabled;
     }
 
     public List<String> notifyEmailList() {

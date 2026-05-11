@@ -22,6 +22,28 @@ import org.slf4j.LoggerFactory;
 public class MscBrowserTracker implements AutoCloseable {
     public static final String TRACKING_URL = "https://www.msccargo.cn/zh/track-a-shipment";
     public static final long DEFAULT_CHROMIUM_LAUNCH_TIMEOUT_MS = 180_000L;
+    static final String STEALTH_USER_AGENT =
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
+    static final List<String> STEALTH_LAUNCH_ARGS = List.of(
+            "--disable-blink-features=AutomationControlled",
+            "--no-sandbox",
+            "--disable-dev-shm-usage");
+    static final List<String> STEALTH_IGNORE_DEFAULT_ARGS = List.of("--enable-automation");
+    static final String STEALTH_INIT_SCRIPT = """
+            Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+            Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+            Object.defineProperty(navigator, 'languages', { get: () => ['zh-CN', 'zh', 'en'] });
+            window.chrome = window.chrome || { runtime: {} };
+            if (window.navigator.permissions && window.navigator.permissions.query) {
+              const originalQuery = window.navigator.permissions.query.bind(window.navigator.permissions);
+              window.navigator.permissions.query = (parameters) => (
+                parameters && parameters.name === 'notifications'
+                  ? Promise.resolve({ state: Notification.permission })
+                  : originalQuery(parameters)
+              );
+            }
+            """;
+
     private static final Logger LOGGER = LoggerFactory.getLogger(MscBrowserTracker.class);
     private static final double PAGE_NAVIGATION_TIMEOUT_MS = 120_000;
     private static final long PAGE_READY_TIMEOUT_MS = 75_000;
@@ -32,22 +54,33 @@ public class MscBrowserTracker implements AutoCloseable {
     private final MscTrackingTextParser textParser = new MscTrackingTextParser();
 
     public MscBrowserTracker() {
-        this(DEFAULT_CHROMIUM_LAUNCH_TIMEOUT_MS, false);
+        this(DEFAULT_CHROMIUM_LAUNCH_TIMEOUT_MS, false, true);
     }
 
     public MscBrowserTracker(long chromiumLaunchTimeoutMs) {
-        this(chromiumLaunchTimeoutMs, true);
+        this(chromiumLaunchTimeoutMs, true, true);
     }
 
     public MscBrowserTracker(long chromiumLaunchTimeoutMs, boolean headless) {
+        this(chromiumLaunchTimeoutMs, headless, true);
+    }
+
+    public MscBrowserTracker(long chromiumLaunchTimeoutMs, boolean headless, boolean stealth) {
         if (chromiumLaunchTimeoutMs <= 0) {
             throw new IllegalArgumentException("chromiumLaunchTimeoutMs must be positive, got " + chromiumLaunchTimeoutMs);
         }
         this.playwright = Playwright.create();
-        this.browser = launchBrowser(playwright, chromiumLaunchTimeoutMs, headless);
-        this.context = browser.newContext(new Browser.NewContextOptions()
+        this.browser = launchBrowser(playwright, chromiumLaunchTimeoutMs, headless, stealth);
+        Browser.NewContextOptions contextOptions = new Browser.NewContextOptions()
                 .setLocale("zh-CN")
-                .setViewportSize(1440, 1000));
+                .setViewportSize(1440, 1000);
+        if (stealth) {
+            contextOptions.setUserAgent(STEALTH_USER_AGENT);
+        }
+        this.context = browser.newContext(contextOptions);
+        if (stealth) {
+            context.addInitScript(STEALTH_INIT_SCRIPT);
+        }
     }
 
     public MscTrackingResult query(
@@ -177,25 +210,33 @@ public class MscBrowserTracker implements AutoCloseable {
         playwright.close();
     }
 
-    private static Browser launchBrowser(Playwright playwright, long launchTimeoutMs, boolean headless) {
+    private static Browser launchBrowser(Playwright playwright, long launchTimeoutMs, boolean headless, boolean stealth) {
         try {
-            return playwright.chromium().launch(buildChromeLaunchOptions(launchTimeoutMs, headless));
+            return playwright.chromium().launch(buildChromeLaunchOptions(launchTimeoutMs, headless, stealth));
         } catch (RuntimeException chromeError) {
-            return playwright.chromium().launch(buildChromiumLaunchOptions(launchTimeoutMs, headless));
+            return playwright.chromium().launch(buildChromiumLaunchOptions(launchTimeoutMs, headless, stealth));
         }
     }
 
-    static BrowserType.LaunchOptions buildChromeLaunchOptions(long launchTimeoutMs, boolean headless) {
-        return new BrowserType.LaunchOptions()
+    static BrowserType.LaunchOptions buildChromeLaunchOptions(long launchTimeoutMs, boolean headless, boolean stealth) {
+        BrowserType.LaunchOptions options = new BrowserType.LaunchOptions()
                 .setHeadless(headless)
                 .setChannel("chrome")
                 .setTimeout(launchTimeoutMs);
+        if (stealth) {
+            options.setArgs(STEALTH_LAUNCH_ARGS).setIgnoreDefaultArgs(STEALTH_IGNORE_DEFAULT_ARGS);
+        }
+        return options;
     }
 
-    static BrowserType.LaunchOptions buildChromiumLaunchOptions(long launchTimeoutMs, boolean headless) {
-        return new BrowserType.LaunchOptions()
+    static BrowserType.LaunchOptions buildChromiumLaunchOptions(long launchTimeoutMs, boolean headless, boolean stealth) {
+        BrowserType.LaunchOptions options = new BrowserType.LaunchOptions()
                 .setHeadless(headless)
                 .setTimeout(launchTimeoutMs);
+        if (stealth) {
+            options.setArgs(STEALTH_LAUNCH_ARGS).setIgnoreDefaultArgs(STEALTH_IGNORE_DEFAULT_ARGS);
+        }
+        return options;
     }
 
     private static void navigateToTrackingPage(Page page) {
