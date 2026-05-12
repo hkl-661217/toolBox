@@ -675,16 +675,30 @@
         body: JSON.stringify(payload)
       });
       if (!response.ok) {
-        setMessage('操作失败，请查看后端日志。', 'error');
+        setMessage(await extractErrorMessage(response), 'error');
         return;
       }
       form.reset();
       setMessage('绑定创建成功，已生成首次物流基线。', 'success');
       await loadBindings();
     } catch (error) {
-      setMessage('操作失败，请查看后端日志。', 'error');
+      setMessage('操作失败，请检查网络或后端日志。', 'error');
     }
   });
+
+  async function extractErrorMessage(response) {
+    try {
+      const data = await response.clone().json();
+      if (data && typeof data.message === 'string' && data.message) {
+        return data.message;
+      }
+    } catch (_) {}
+    try {
+      const text = await response.text();
+      if (text) { return text; }
+    } catch (_) {}
+    return `操作失败（HTTP ${response.status}），请查看后端日志。`;
+  }
 
   async function loadBindings() {
     try {
@@ -758,13 +772,13 @@
     try {
       const response = await fetch(`/api/shipping-tracking/bindings/${id}/sync`, { method: 'POST' });
       if (!response.ok) {
-        setMessage('操作失败，请查看后端日志。', 'error');
+        setMessage(await extractErrorMessage(response), 'error');
         return;
       }
       setMessage('同步完成；如物流信息无变化，不会发送邮件。', 'success');
       await loadBindings();
     } catch (error) {
-      setMessage('操作失败，请查看后端日志。', 'error');
+      setMessage('操作失败，请检查网络或后端日志。', 'error');
     }
   }
 
@@ -773,13 +787,13 @@
     try {
       const response = await fetch(`/api/shipping-tracking/bindings/${id}/disable`, { method: 'POST' });
       if (!response.ok) {
-        setMessage('操作失败，请查看后端日志。', 'error');
+        setMessage(await extractErrorMessage(response), 'error');
         return;
       }
       setMessage('绑定已停用，后续定时任务不会继续查询。', 'success');
       await loadBindings();
     } catch (error) {
-      setMessage('操作失败，请查看后端日志。', 'error');
+      setMessage('操作失败，请检查网络或后端日志。', 'error');
     }
   }
 

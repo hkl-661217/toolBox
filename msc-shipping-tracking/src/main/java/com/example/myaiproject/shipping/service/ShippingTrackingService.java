@@ -63,6 +63,14 @@ public class ShippingTrackingService {
     public ShippingTrackingBinding createBinding(String orderNo, String bookingNo) {
         String cleanOrderNo = requireText(orderNo, "订单号不能为空");
         String cleanBookingNo = requireText(bookingNo, "订舱号不能为空");
+        bindingRepository.findByOrderNo(cleanOrderNo).ifPresent(existing -> {
+            throw new IllegalArgumentException(
+                    "订单号 " + cleanOrderNo + " 已绑定订舱号 " + existing.bookingNo() + "，请先停用或更换订单号");
+        });
+        bindingRepository.findByBookingNo(cleanBookingNo).ifPresent(existing -> {
+            throw new IllegalArgumentException(
+                    "订舱号 " + cleanBookingNo + " 已绑定订单号 " + existing.orderNo() + "，请先停用或更换订舱号");
+        });
         OffsetDateTime now = OffsetDateTime.now();
         ShippingTrackingBinding binding = transactionTemplate.execute(
                 status -> bindingRepository.insert(cleanOrderNo, cleanBookingNo, now));

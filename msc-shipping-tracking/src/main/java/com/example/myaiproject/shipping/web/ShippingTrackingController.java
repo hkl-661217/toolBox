@@ -3,7 +3,10 @@ package com.example.myaiproject.shipping.web;
 import com.example.myaiproject.shipping.model.ShippingTrackingBinding;
 import com.example.myaiproject.shipping.service.ShippingTrackingService;
 import java.util.List;
+import java.util.Map;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -47,5 +50,13 @@ public class ShippingTrackingController {
     }
 
     public record CreateBindingRequest(String orderNo, String bookingNo) {
+    }
+
+    @ExceptionHandler({IllegalArgumentException.class, DuplicateKeyException.class})
+    public ResponseEntity<Map<String, String>> handleBadRequest(Exception error) {
+        String message = error instanceof DuplicateKeyException
+                ? "订单号或订舱号已绑定，请检查现有绑定列表"
+                : error.getMessage();
+        return ResponseEntity.badRequest().body(Map.of("message", message == null ? "请求参数无效" : message));
     }
 }

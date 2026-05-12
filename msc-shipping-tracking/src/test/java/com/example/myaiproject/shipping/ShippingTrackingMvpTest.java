@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -401,6 +402,47 @@ class ShippingTrackingMvpTest {
                 "select enabled from shipping_tracking_binding where id = ?",
                 Boolean.class,
                 id.longValue()));
+    }
+
+    @Test
+    void createBindingRejectsDuplicateBookingNoWithFriendlyMessage() {
+        fakeClient.enqueue(success(List.of(event("18/05/2026", "Ningbo, CN", "Loaded", "MSC A"))));
+        service.createBinding("ORD-DUP-1", "177CDUP9999");
+
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                () -> service.createBinding("ORD-DUP-2", "177CDUP9999"));
+
+        assertTrue(error.getMessage().contains("订舱号"));
+        assertTrue(error.getMessage().contains("177CDUP9999"));
+        assertTrue(error.getMessage().contains("ORD-DUP-1"));
+        assertEquals(1, count("shipping_tracking_binding"));
+    }
+
+    @Test
+    void createBindingRejectsDuplicateOrderNoWithFriendlyMessage() {
+        fakeClient.enqueue(success(List.of(event("18/05/2026", "Ningbo, CN", "Loaded", "MSC A"))));
+        service.createBinding("ORD-SAME", "177CDIFF001");
+
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                () -> service.createBinding("ORD-SAME", "177CDIFF002"));
+
+        assertTrue(error.getMessage().contains("订单号"));
+        assertTrue(error.getMessage().contains("ORD-SAME"));
+        assertTrue(error.getMessage().contains("177CDIFF001"));
+        assertEquals(1, count("shipping_tracking_binding"));
+    }
+
+    @Test
+    void duplicateBindingApiReturns400WithJsonMessage() throws Exception {
+        fakeClient.enqueue(success(List.of(event("18/05/2026", "Ningbo, CN", "Loaded", "MSC A"))));
+        service.createBinding("ORD-API-DUP", "177CAPIDUP1");
+
+        mockMvc.perform(post("/api/shipping-tracking/bindings")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"orderNo\":\"ORD-API-NEW\",\"bookingNo\":\"177CAPIDUP1\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("177CAPIDUP1")))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("ORD-API-DUP")));
     }
 
     @Test

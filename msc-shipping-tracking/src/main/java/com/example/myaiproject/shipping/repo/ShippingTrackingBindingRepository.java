@@ -46,6 +46,20 @@ public class ShippingTrackingBindingRepository {
         return rows.stream().findFirst();
     }
 
+    public Optional<ShippingTrackingBinding> findByOrderNo(String orderNo) {
+        return jdbcTemplate.query(
+                "select * from shipping_tracking_binding where order_no = ?",
+                mapper(),
+                orderNo).stream().findFirst();
+    }
+
+    public Optional<ShippingTrackingBinding> findByBookingNo(String bookingNo) {
+        return jdbcTemplate.query(
+                "select * from shipping_tracking_binding where booking_no = ?",
+                mapper(),
+                bookingNo).stream().findFirst();
+    }
+
     public List<ShippingTrackingBinding> findAll() {
         return jdbcTemplate.query(
                 "select * from shipping_tracking_binding order by id desc",
