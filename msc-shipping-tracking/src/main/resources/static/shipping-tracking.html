@@ -326,6 +326,25 @@
       color: var(--muted);
     }
 
+    .node-line {
+      display: flex;
+      gap: 8px;
+      align-items: baseline;
+      line-height: 1.6;
+      white-space: normal;
+    }
+
+    .node-line + .node-line {
+      margin-top: 2px;
+    }
+
+    .node-label {
+      flex-shrink: 0;
+      min-width: 36px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
     .badge {
       display: inline-flex;
       align-items: center;
@@ -585,8 +604,8 @@
         <td>${enabledBadge(row.enabled)}</td>
         <td>${statusBadge(row.lastStatus)}</td>
         <td class="mono">${textCell(row.lastEta)}</td>
-        <td>${textCell(row.lastNode)}</td>
-        <td class="mono">${textCell(row.lastQueryTime)}</td>
+        <td>${lastNodeCell(row.lastNode)}</td>
+        <td class="mono">${formatQueryTime(row.lastQueryTime)}</td>
         <td>
           <div class="actions">
             <button class="secondary" onclick="syncBinding(${row.id})">手动同步</button>
@@ -658,6 +677,36 @@
       return '<span class="muted">-</span>';
     }
     return escapeHtml(value);
+  }
+
+  function lastNodeCell(value) {
+    if (value === null || value === undefined || value === '') {
+      return '<span class="muted">-</span>';
+    }
+    const parts = String(value).includes('|') ? String(value).split('|') : [String(value)];
+    const labels = ['日期', '位置', '描述'];
+    if (parts.length >= 2) {
+      return parts.map((part, idx) => {
+        const label = labels[idx] || '';
+        const cleaned = (part || '').trim();
+        if (!cleaned) return '';
+        return `<div class="node-line"><span class="node-label">${label}</span>${escapeHtml(cleaned)}</div>`;
+      }).filter(Boolean).join('');
+    }
+    return escapeHtml(parts[0]);
+  }
+
+  function formatQueryTime(value) {
+    if (value === null || value === undefined || value === '') {
+      return '<span class="muted">-</span>';
+    }
+    const s = String(value);
+    // ISO 8601 like 2026-05-12T08:40:58.218286+08:00 -> 2026-05-12 08:40:58
+    const match = s.match(/^(\d{4}-\d{2}-\d{2})[T\s](\d{2}:\d{2}:\d{2})/);
+    if (match) {
+      return escapeHtml(`${match[1]} ${match[2]}`);
+    }
+    return escapeHtml(s);
   }
 
   function setMessage(text, type) {

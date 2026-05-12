@@ -120,7 +120,7 @@ class CurlImpersonateMscTrackingClientTest {
         assertTrue(result.currentStatus().contains("BL BL-XYZ-1"));
         assertTrue(result.currentStatus().contains("QINGDAO, CN -> SYDNEY, AU"));
         assertNotNull(result.latestNode());
-        assertTrue(result.latestNode().contains("Estimated Time of Arrival"));
+        assertEquals("31/05/2026|SYDNEY, AU|Estimated Time of Arrival", result.latestNode());
         assertTrue(result.rawText().contains("MEDUWX".isEmpty() ? "BL-XYZ-1" : "BL-XYZ-1"));
         assertEquals("", result.errorReason());
     }

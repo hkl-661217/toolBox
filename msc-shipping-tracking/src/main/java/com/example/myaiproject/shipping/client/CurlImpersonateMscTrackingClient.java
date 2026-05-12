@@ -230,18 +230,13 @@ public class CurlImpersonateMscTrackingClient implements MscTrackingClient {
             return null;
         }
         ShippingTrackingEvent first = events.get(0);
-        StringBuilder sb = new StringBuilder();
-        if (first.date() != null && !first.date().isBlank()) {
-            sb.append(first.date()).append(' ');
+        String date = first.date() == null ? "" : first.date().trim();
+        String location = first.location() == null ? "" : first.location().trim();
+        String description = first.description() == null ? "" : first.description().trim();
+        if (date.isEmpty() && location.isEmpty() && description.isEmpty()) {
+            return null;
         }
-        if (first.location() != null && !first.location().isBlank()) {
-            sb.append(first.location()).append(' ');
-        }
-        if (first.description() != null && !first.description().isBlank()) {
-            sb.append(first.description());
-        }
-        String node = sb.toString().trim();
-        return node.isBlank() ? null : node;
+        return date + "|" + location + "|" + description;
     }
 
     private static String joinDetail(JsonNode detail) {
