@@ -345,6 +345,49 @@
       font-size: 12px;
     }
 
+    .muted-note {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .pagination {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-top: 16px;
+    }
+
+    .pagination .page-size-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .pagination select {
+      padding: 4px 8px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: white;
+    }
+
+    .pagination .page-info {
+      margin-left: 8px;
+    }
+
+    .pagination .page-buttons {
+      display: flex;
+      gap: 8px;
+    }
+
+    .pagination button[disabled] {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
     .badge {
       display: inline-flex;
       align-items: center;
@@ -498,6 +541,43 @@
     <div id="message" role="status" aria-live="polite"></div>
   </section>
 
+  <section class="section card input-card" aria-labelledby="accountTitle">
+    <div class="card-head">
+      <div>
+        <h2 class="section-title" id="accountTitle">通知邮箱</h2>
+        <p class="section-note">保存"邮箱 + QQ SMTP 授权码"对应关系。每次检测到变化时，系统会用每个邮箱自身的授权码登录 SMTP，给自己发送一份变更通知。</p>
+        <p class="section-note muted-note">⚠ 授权码以明文存储于 H2 数据库；公网无 TLS 时请只在内网录入。</p>
+      </div>
+    </div>
+    <form id="accountForm">
+      <label>邮箱
+        <input id="accountEmail" name="email" type="email" autocomplete="off" required>
+      </label>
+      <label>QQ SMTP 授权码
+        <input id="accountPassword" name="smtpPassword" type="password" autocomplete="new-password" required>
+      </label>
+      <button type="submit">保存通知邮箱</button>
+    </form>
+    <div id="accountMessage" role="status" aria-live="polite"></div>
+    <div class="table-wrap" style="margin-top: 16px;">
+      <table>
+        <thead>
+        <tr>
+          <th>邮箱</th>
+          <th>状态</th>
+          <th>创建时间</th>
+          <th>操作</th>
+        </tr>
+        </thead>
+        <tbody id="accountsBody">
+        <tr>
+          <td colspan="4" class="empty-state">正在读取通知邮箱...</td>
+        </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
   <section class="section card table-card" aria-labelledby="listTitle">
     <div class="card-head">
       <div>
@@ -527,18 +607,59 @@
         </tbody>
       </table>
     </div>
+    <div class="pagination" id="bindingsPagination">
+      <div class="page-size-group">
+        <label for="pageSizeSelect">每页</label>
+        <select id="pageSizeSelect">
+          <option value="5">5</option>
+          <option value="10" selected>10</option>
+          <option value="20">20</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+        </select>
+        <span class="page-info" id="pageInfo">第 1 / 1 页（共 0 条）</span>
+      </div>
+      <div class="page-buttons">
+        <button class="secondary" id="pagePrev" type="button">上一页</button>
+        <button class="secondary" id="pageNext" type="button">下一页</button>
+      </div>
+    </div>
   </section>
 </main>
 <script>
   const form = document.getElementById('bindingForm');
   const message = document.getElementById('message');
   const body = document.getElementById('bindingsBody');
+  const accountForm = document.getElementById('accountForm');
+  const accountMessage = document.getElementById('accountMessage');
+  const accountsBody = document.getElementById('accountsBody');
+  const pageSizeSelect = document.getElementById('pageSizeSelect');
+  const pageInfo = document.getElementById('pageInfo');
+  const pagePrev = document.getElementById('pagePrev');
+  const pageNext = document.getElementById('pageNext');
   const metrics = {
     total: document.getElementById('metricTotal'),
     enabled: document.getElementById('metricEnabled'),
     success: document.getElementById('metricSuccess'),
     exception: document.getElementById('metricException')
   };
+
+  let allBindings = [];
+  let currentPage = 0;
+  let pageSize = parseInt(pageSizeSelect.value, 10) || 10;
+
+  pageSizeSelect.addEventListener('change', () => {
+    pageSize = parseInt(pageSizeSelect.value, 10) || 10;
+    currentPage = 0;
+    renderBindings();
+  });
+  pagePrev.addEventListener('click', () => {
+    if (currentPage > 0) { currentPage--; renderBindings(); }
+  });
+  pageNext.addEventListener('click', () => {
+    const totalPages = Math.max(1, Math.ceil(allBindings.length / pageSize));
+    if (currentPage < totalPages - 1) { currentPage++; renderBindings(); }
+  });
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -571,13 +692,26 @@
       if (!response.ok) {
         throw new Error('Failed to load bindings');
       }
-      const rows = await response.json();
-      updateMetrics(rows);
-      renderBindings(rows);
+      allBindings = await response.json();
+      updateMetrics(allBindings);
+      const totalPages = Math.max(1, Math.ceil(allBindings.length / pageSize));
+      if (currentPage >= totalPages) { currentPage = totalPages - 1; }
+      if (currentPage < 0) { currentPage = 0; }
+      renderBindings();
     } catch (error) {
+      allBindings = [];
       body.innerHTML = '<tr><td colspan="9" class="empty-state">绑定列表读取失败，请查看后端日志。</td></tr>';
       updateMetrics([]);
+      updatePagination();
     }
+  }
+
+  function updatePagination() {
+    const total = allBindings.length;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    pageInfo.textContent = `第 ${currentPage + 1} / ${totalPages} 页（共 ${total} 条）`;
+    pagePrev.disabled = currentPage <= 0;
+    pageNext.disabled = currentPage >= totalPages - 1;
   }
 
   function updateMetrics(rows) {
@@ -591,12 +725,15 @@
     metrics.exception.textContent = exception;
   }
 
-  function renderBindings(rows) {
-    if (!rows.length) {
+  function renderBindings() {
+    updatePagination();
+    if (!allBindings.length) {
       body.innerHTML = '<tr><td colspan="9" class="empty-state">暂无绑定。先新增一条订单号与订舱号关系。</td></tr>';
       return;
     }
-    body.innerHTML = rows.map(row => `
+    const start = currentPage * pageSize;
+    const pageRows = allBindings.slice(start, start + pageSize);
+    body.innerHTML = pageRows.map(row => `
       <tr>
         <td>${textCell(row.orderNo)}</td>
         <td class="mono">${textCell(row.bookingNo)}</td>
@@ -723,7 +860,85 @@
       .replaceAll("'", '&#039;');
   }
 
+  accountForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    setAccountMessage('保存中...', '');
+    const payload = {
+      email: document.getElementById('accountEmail').value.trim(),
+      smtpPassword: document.getElementById('accountPassword').value.trim()
+    };
+    try {
+      const response = await fetch('/api/shipping-tracking/notification-accounts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        setAccountMessage('保存失败：' + (text || response.status), 'error');
+        return;
+      }
+      accountForm.reset();
+      setAccountMessage('通知邮箱已保存。', 'success');
+      await loadAccounts();
+    } catch (error) {
+      setAccountMessage('保存失败，请查看后端日志。', 'error');
+    }
+  });
+
+  async function loadAccounts() {
+    try {
+      const response = await fetch('/api/shipping-tracking/notification-accounts');
+      if (!response.ok) { throw new Error('failed'); }
+      const rows = await response.json();
+      renderAccounts(rows);
+    } catch (error) {
+      accountsBody.innerHTML = '<tr><td colspan="4" class="empty-state">通知邮箱读取失败，请查看后端日志。</td></tr>';
+    }
+  }
+
+  function renderAccounts(rows) {
+    if (!rows.length) {
+      accountsBody.innerHTML = '<tr><td colspan="4" class="empty-state">暂无通知邮箱。变更邮件将走环境变量里的默认收件人列表（fallback）。</td></tr>';
+      return;
+    }
+    accountsBody.innerHTML = rows.map(row => `
+      <tr>
+        <td>${textCell(row.email)}</td>
+        <td>${row.enabled === false ? '<span class="badge badge-gray">已停用</span>' : '<span class="badge badge-success">启用中</span>'}</td>
+        <td class="mono">${formatQueryTime(row.createdAt)}</td>
+        <td>
+          <div class="actions">
+            <button class="secondary danger" onclick="deleteAccount(${row.id})">删除</button>
+          </div>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  async function deleteAccount(id) {
+    if (!confirm('确认删除该通知邮箱？')) { return; }
+    setAccountMessage('删除中...', '');
+    try {
+      const response = await fetch(`/api/shipping-tracking/notification-accounts/${id}`, { method: 'DELETE' });
+      if (!response.ok) {
+        setAccountMessage('删除失败，请查看后端日志。', 'error');
+        return;
+      }
+      setAccountMessage('已删除。', 'success');
+      await loadAccounts();
+    } catch (error) {
+      setAccountMessage('删除失败，请查看后端日志。', 'error');
+    }
+  }
+
+  function setAccountMessage(text, type) {
+    accountMessage.textContent = text;
+    accountMessage.className = type || '';
+  }
+
   loadBindings();
+  loadAccounts();
 </script>
 </body>
 </html>

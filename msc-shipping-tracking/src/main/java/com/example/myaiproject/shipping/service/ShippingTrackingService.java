@@ -2,6 +2,7 @@ package com.example.myaiproject.shipping.service;
 
 import com.example.myaiproject.shipping.client.MscTrackingClient;
 import com.example.myaiproject.shipping.client.MscTrackingQueryResult;
+import com.example.myaiproject.shipping.model.NotificationAccount;
 import com.example.myaiproject.shipping.model.ShippingTrackingBinding;
 import com.example.myaiproject.shipping.model.ShippingTrackingEventChange;
 import com.example.myaiproject.shipping.model.ShippingTrackingSnapshot;
@@ -31,6 +32,7 @@ public class ShippingTrackingService {
     private final ShippingTrackingChangeDetector changeDetector;
     private final MscTrackingClient mscTrackingClient;
     private final TrackingNotificationSender notificationSender;
+    private final NotificationAccountService notificationAccountService;
     private final ShippingTrackingEmailTemplateBuilder emailTemplateBuilder;
     private final ObjectMapper objectMapper;
     private final TransactionTemplate transactionTemplate;
@@ -42,6 +44,7 @@ public class ShippingTrackingService {
             ShippingTrackingChangeDetector changeDetector,
             MscTrackingClient mscTrackingClient,
             TrackingNotificationSender notificationSender,
+            NotificationAccountService notificationAccountService,
             ShippingTrackingEmailTemplateBuilder emailTemplateBuilder,
             ObjectMapper objectMapper,
             PlatformTransactionManager transactionManager) {
@@ -51,6 +54,7 @@ public class ShippingTrackingService {
         this.changeDetector = changeDetector;
         this.mscTrackingClient = mscTrackingClient;
         this.notificationSender = notificationSender;
+        this.notificationAccountService = notificationAccountService;
         this.emailTemplateBuilder = emailTemplateBuilder;
         this.objectMapper = objectMapper;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
@@ -153,7 +157,21 @@ public class ShippingTrackingService {
         boolean emailSent = false;
         OffsetDateTime emailSentTime = null;
         try {
-            emailSent = notificationSender.send(email.subject(), email.htmlBody());
+            List<NotificationAccount> accounts = notificationAccountService.listEnabled();
+            if (accounts.isEmpty()) {
+                emailSent = notificationSender.send(email.subject(), email.htmlBody());
+            } else {
+                for (NotificationAccount account : accounts) {
+                    boolean ok = notificationSender.sendAs(
+                            email.subject(),
+                            email.htmlBody(),
+                            account.email(),
+                            account.smtpPassword());
+                    if (ok) {
+                        emailSent = true;
+                    }
+                }
+            }
             if (emailSent) {
                 emailSentTime = OffsetDateTime.now();
             }

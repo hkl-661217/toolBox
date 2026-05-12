@@ -547,16 +547,24 @@ class ShippingTrackingMvpTest {
 
     static class RecordingNotificationSender implements TrackingNotificationSender {
         final List<SentMessage> sentMessages = new java.util.ArrayList<>();
+        final List<SentMessage> sentAsMessages = new java.util.ArrayList<>();
         boolean nextSendResult = true;
 
         void reset() {
             sentMessages.clear();
+            sentAsMessages.clear();
             nextSendResult = true;
         }
 
         @Override
         public boolean send(String subject, String body) {
             sentMessages.add(new SentMessage(subject, body));
+            return nextSendResult;
+        }
+
+        @Override
+        public boolean sendAs(String subject, String body, String email, String smtpPassword) {
+            sentAsMessages.add(new SentMessage(subject, body));
             return nextSendResult;
         }
     }
