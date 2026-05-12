@@ -388,6 +388,49 @@
       cursor: not-allowed;
     }
 
+    .search-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .search-bar input {
+      flex: 0 1 320px;
+      max-width: 100%;
+    }
+
+    .search-bar .search-hint {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .departure-kind {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-right: 6px;
+      padding: 1px 7px;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 800;
+      line-height: 1.4;
+      vertical-align: 1px;
+    }
+
+    .departure-kind.actual {
+      color: var(--gold);
+      border-color: rgba(183, 139, 40, 0.28);
+      background: var(--gold-soft);
+    }
+
+    .departure-kind.estimated {
+      color: #475569;
+      border-color: #d8dee8;
+      background: var(--slate-soft);
+    }
+
     .badge {
       display: inline-flex;
       align-items: center;
@@ -585,6 +628,10 @@
         <p class="section-note">手动同步用于本地验收或紧急刷新；停用后该绑定不会继续参与定时查询。</p>
       </div>
     </div>
+    <div class="search-bar">
+      <input id="searchKeyword" type="search" autocomplete="off" placeholder="搜索订单号或订舱号（不区分大小写）">
+      <span class="search-hint" id="searchHint"></span>
+    </div>
     <div class="table-wrap">
       <table>
         <thead>
@@ -596,13 +643,14 @@
           <th>最新状态</th>
           <th>ETA</th>
           <th>最新节点</th>
+          <th>开船时间</th>
           <th>最后查询时间</th>
           <th>操作</th>
         </tr>
         </thead>
         <tbody id="bindingsBody">
         <tr>
-          <td colspan="9" class="empty-state">正在读取绑定列表...</td>
+          <td colspan="10" class="empty-state">正在读取绑定列表...</td>
         </tr>
         </tbody>
       </table>
@@ -637,6 +685,8 @@
   const pageInfo = document.getElementById('pageInfo');
   const pagePrev = document.getElementById('pagePrev');
   const pageNext = document.getElementById('pageNext');
+  const searchInput = document.getElementById('searchKeyword');
+  const searchHint = document.getElementById('searchHint');
   const metrics = {
     total: document.getElementById('metricTotal'),
     enabled: document.getElementById('metricEnabled'),
@@ -647,6 +697,7 @@
   let allBindings = [];
   let currentPage = 0;
   let pageSize = parseInt(pageSizeSelect.value, 10) || 10;
+  let searchKeyword = '';
 
   pageSizeSelect.addEventListener('change', () => {
     pageSize = parseInt(pageSizeSelect.value, 10) || 10;
@@ -657,9 +708,23 @@
     if (currentPage > 0) { currentPage--; renderBindings(); }
   });
   pageNext.addEventListener('click', () => {
-    const totalPages = Math.max(1, Math.ceil(allBindings.length / pageSize));
+    const totalPages = Math.max(1, Math.ceil(filteredBindings().length / pageSize));
     if (currentPage < totalPages - 1) { currentPage++; renderBindings(); }
   });
+  searchInput.addEventListener('input', () => {
+    searchKeyword = searchInput.value.trim().toLowerCase();
+    currentPage = 0;
+    renderBindings();
+  });
+
+  function filteredBindings() {
+    if (!searchKeyword) { return allBindings; }
+    return allBindings.filter(row => {
+      const order = (row.orderNo || '').toLowerCase();
+      const booking = (row.bookingNo || '').toLowerCase();
+      return order.includes(searchKeyword) || booking.includes(searchKeyword);
+    });
+  }
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -708,22 +773,29 @@
       }
       allBindings = await response.json();
       updateMetrics(allBindings);
-      const totalPages = Math.max(1, Math.ceil(allBindings.length / pageSize));
-      if (currentPage >= totalPages) { currentPage = totalPages - 1; }
-      if (currentPage < 0) { currentPage = 0; }
       renderBindings();
     } catch (error) {
       allBindings = [];
-      body.innerHTML = '<tr><td colspan="9" class="empty-state">绑定列表读取失败，请查看后端日志。</td></tr>';
+      body.innerHTML = '<tr><td colspan="10" class="empty-state">绑定列表读取失败，请查看后端日志。</td></tr>';
       updateMetrics([]);
       updatePagination();
     }
   }
 
   function updatePagination() {
-    const total = allBindings.length;
+    const filtered = filteredBindings();
+    const total = filtered.length;
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
-    pageInfo.textContent = `第 ${currentPage + 1} / ${totalPages} 页（共 ${total} 条）`;
+    if (currentPage >= totalPages) { currentPage = totalPages - 1; }
+    if (currentPage < 0) { currentPage = 0; }
+    const overallTotal = allBindings.length;
+    if (searchKeyword) {
+      pageInfo.textContent = `第 ${currentPage + 1} / ${totalPages} 页（命中 ${total} 条 / 共 ${overallTotal} 条）`;
+      searchHint.textContent = `匹配 ${total} / ${overallTotal} 条`;
+    } else {
+      pageInfo.textContent = `第 ${currentPage + 1} / ${totalPages} 页（共 ${overallTotal} 条）`;
+      searchHint.textContent = '';
+    }
     pagePrev.disabled = currentPage <= 0;
     pageNext.disabled = currentPage >= totalPages - 1;
   }
@@ -742,11 +814,16 @@
   function renderBindings() {
     updatePagination();
     if (!allBindings.length) {
-      body.innerHTML = '<tr><td colspan="9" class="empty-state">暂无绑定。先新增一条订单号与订舱号关系。</td></tr>';
+      body.innerHTML = '<tr><td colspan="10" class="empty-state">暂无绑定。先新增一条订单号与订舱号关系。</td></tr>';
+      return;
+    }
+    const filtered = filteredBindings();
+    if (!filtered.length) {
+      body.innerHTML = `<tr><td colspan="10" class="empty-state">未找到匹配 “${escapeHtml(searchKeyword)}” 的订单号或订舱号。</td></tr>`;
       return;
     }
     const start = currentPage * pageSize;
-    const pageRows = allBindings.slice(start, start + pageSize);
+    const pageRows = filtered.slice(start, start + pageSize);
     body.innerHTML = pageRows.map(row => `
       <tr>
         <td>${textCell(row.orderNo)}</td>
@@ -756,6 +833,7 @@
         <td>${statusBadge(row.lastStatus)}</td>
         <td class="mono">${textCell(row.lastEta)}</td>
         <td>${lastNodeCell(row.lastNode)}</td>
+        <td>${departureCell(row.lastDeparture)}</td>
         <td class="mono">${formatQueryTime(row.lastQueryTime)}</td>
         <td>
           <div class="actions">
@@ -842,6 +920,33 @@
         const cleaned = (part || '').trim();
         if (!cleaned) return '';
         return `<div class="node-line"><span class="node-label">${label}</span>${escapeHtml(cleaned)}</div>`;
+      }).filter(Boolean).join('');
+    }
+    return escapeHtml(parts[0]);
+  }
+
+  function departureCell(value) {
+    if (value === null || value === undefined || value === '') {
+      return '<span class="muted">-</span>';
+    }
+    const parts = String(value).includes('|') ? String(value).split('|') : [String(value)];
+    const description = (parts[2] || parts[0] || '').toLowerCase();
+    const isActual = description.includes('actual time of departure')
+      || description.includes('vessel departed')
+      || description === 'departed'
+      || description.includes(' departed');
+    const kindLabel = isActual ? '实际' : '预计';
+    const kindClass = isActual ? 'actual' : 'estimated';
+    const labels = ['日期', '位置', '描述'];
+    if (parts.length >= 2) {
+      return parts.map((part, idx) => {
+        const label = labels[idx] || '';
+        const cleaned = (part || '').trim();
+        if (!cleaned) return '';
+        const prefix = idx === 2
+          ? `<span class="departure-kind ${kindClass}">${kindLabel}</span>`
+          : '';
+        return `<div class="node-line"><span class="node-label">${label}</span>${prefix}${escapeHtml(cleaned)}</div>`;
       }).filter(Boolean).join('');
     }
     return escapeHtml(parts[0]);

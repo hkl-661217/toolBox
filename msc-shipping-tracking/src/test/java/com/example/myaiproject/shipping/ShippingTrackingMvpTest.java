@@ -405,6 +405,43 @@ class ShippingTrackingMvpTest {
     }
 
     @Test
+    void createBindingPopulatesLastDepartureFromEvents() {
+        fakeClient.enqueue(success(List.of(
+                event("12/05/2026", "Qingdao, CN", "Empty to Shipper", "EMPTY"),
+                event("18/05/2026", "Qingdao, CN", "Estimated Time of Departure", "MSC DAISY KQ620A"),
+                event("16/06/2026", "Sydney, AU", "Estimated Time of Arrival", "MSC DAISY KQ620A"))));
+
+        ShippingTrackingBinding binding = service.createBinding("ORD-DEP-1", "177CDEP0001");
+
+        assertEquals("18/05/2026|Qingdao, CN|Estimated Time of Departure", binding.lastDeparture());
+    }
+
+    @Test
+    void syncBindingUpgradesLastDepartureFromEstimatedToActual() {
+        fakeClient.enqueue(success(List.of(
+                event("18/05/2026", "Qingdao, CN", "Estimated Time of Departure", "MSC DAISY KQ620A"))));
+        ShippingTrackingBinding baseline = service.createBinding("ORD-DEP-2", "177CDEP0002");
+        assertEquals("18/05/2026|Qingdao, CN|Estimated Time of Departure", baseline.lastDeparture());
+
+        fakeClient.enqueue(success(List.of(
+                event("19/05/2026", "Qingdao, CN", "Actual Time of Departure", "MSC DAISY KQ620A"))));
+
+        ShippingTrackingBinding synced = service.syncBinding(baseline.id());
+
+        assertEquals("19/05/2026|Qingdao, CN|Actual Time of Departure", synced.lastDeparture());
+    }
+
+    @Test
+    void createBindingLeavesLastDepartureNullWhenNoDepartureEvent() {
+        fakeClient.enqueue(success(List.of(
+                event("16/06/2026", "Sydney, AU", "Estimated Time of Arrival", "MSC DAISY KQ620A"))));
+
+        ShippingTrackingBinding binding = service.createBinding("ORD-DEP-3", "177CDEP0003");
+
+        assertNull(binding.lastDeparture());
+    }
+
+    @Test
     void createBindingRejectsDuplicateBookingNoWithFriendlyMessage() {
         fakeClient.enqueue(success(List.of(event("18/05/2026", "Ningbo, CN", "Loaded", "MSC A"))));
         service.createBinding("ORD-DUP-1", "177CDUP9999");

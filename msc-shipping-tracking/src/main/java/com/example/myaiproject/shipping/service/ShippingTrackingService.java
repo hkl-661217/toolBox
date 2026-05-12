@@ -136,11 +136,15 @@ public class ShippingTrackingService {
                     baseline,
                     now);
 
+            ShippingTrackingDepartureSelector.Result departure = "SUCCESS".equals(snapshotStatus)
+                    ? ShippingTrackingDepartureSelector.select(queryResult.events())
+                    : null;
             bindingRepository.updateAfterQuery(
                     binding.id(),
                     snapshotStatus,
                     queryResult.eta(),
                     queryResult.latestNode(),
+                    departure == null ? null : departure.formatted(),
                     queryResult.queryTime(),
                     now);
 

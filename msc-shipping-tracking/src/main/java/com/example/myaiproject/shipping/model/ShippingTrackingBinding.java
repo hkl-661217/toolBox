@@ -11,6 +11,7 @@ public record ShippingTrackingBinding(
         String lastStatus,
         String lastEta,
         String lastNode,
+        String lastDeparture,
         OffsetDateTime lastQueryTime,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt) {

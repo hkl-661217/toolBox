@@ -78,16 +78,18 @@ public class ShippingTrackingBindingRepository {
             String status,
             String eta,
             String latestNode,
+            String departure,
             OffsetDateTime queryTime,
             OffsetDateTime now) {
         String safeStatus = ShippingTrackingFieldSanitizer.truncate(status, ShippingTrackingFieldSanitizer.STATUS_MAX_LENGTH);
         String safeEta = ShippingTrackingFieldSanitizer.truncate(eta, ShippingTrackingFieldSanitizer.ETA_MAX_LENGTH);
         String safeLatestNode = ShippingTrackingFieldSanitizer.truncate(latestNode, ShippingTrackingFieldSanitizer.LATEST_NODE_MAX_LENGTH);
+        String safeDeparture = ShippingTrackingFieldSanitizer.truncate(departure, ShippingTrackingFieldSanitizer.LATEST_NODE_MAX_LENGTH);
         jdbcTemplate.update("""
                 update shipping_tracking_binding
-                set last_status = ?, last_eta = ?, last_node = ?, last_query_time = ?, updated_at = ?
+                set last_status = ?, last_eta = ?, last_node = ?, last_departure = ?, last_query_time = ?, updated_at = ?
                 where id = ?
-                """, safeStatus, emptyToNull(safeEta), emptyToNull(safeLatestNode), queryTime, now, id);
+                """, safeStatus, emptyToNull(safeEta), emptyToNull(safeLatestNode), emptyToNull(safeDeparture), queryTime, now, id);
     }
 
     public void disable(long id, OffsetDateTime now) {
@@ -111,6 +113,7 @@ public class ShippingTrackingBindingRepository {
                 rs.getString("last_status"),
                 rs.getString("last_eta"),
                 rs.getString("last_node"),
+                rs.getString("last_departure"),
                 rs.getObject("last_query_time", OffsetDateTime.class),
                 rs.getObject("created_at", OffsetDateTime.class),
                 rs.getObject("updated_at", OffsetDateTime.class));

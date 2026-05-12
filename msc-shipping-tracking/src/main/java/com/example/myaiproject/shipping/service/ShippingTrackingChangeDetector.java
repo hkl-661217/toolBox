@@ -123,11 +123,11 @@ public class ShippingTrackingChangeDetector {
                 + normalize(event.vesselVoyage());
     }
 
-    private static boolean isEstimatedDeparture(ShippingTrackingEvent event) {
+    static boolean isEstimatedDeparture(ShippingTrackingEvent event) {
         return normalize(event.description()).toLowerCase().contains("estimated time of departure");
     }
 
-    private static boolean isCompletedDeparture(ShippingTrackingEvent event) {
+    static boolean isCompletedDeparture(ShippingTrackingEvent event) {
         String description = normalize(event.description()).toLowerCase();
         return description.contains("actual time of departure")
                 || description.contains("vessel departed")

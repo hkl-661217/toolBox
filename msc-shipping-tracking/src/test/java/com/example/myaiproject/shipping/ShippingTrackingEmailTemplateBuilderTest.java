@@ -24,6 +24,7 @@ class ShippingTrackingEmailTemplateBuilderTest {
                 "SUCCESS",
                 "31/05/2026",
                 "QINGDAO, CN",
+                null,
                 OffsetDateTime.parse("2026-05-07T09:30:00+08:00"),
                 OffsetDateTime.parse("2026-05-07T09:00:00+08:00"),
                 OffsetDateTime.parse("2026-05-07T09:30:00+08:00"));
