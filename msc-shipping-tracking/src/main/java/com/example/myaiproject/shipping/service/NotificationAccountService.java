@@ -40,4 +40,11 @@ public class NotificationAccountService {
     public void delete(long id) {
         repository.delete(id);
     }
+
+    public void setEnabled(long id, boolean enabled) {
+        if (repository.findById(id).isEmpty()) {
+            throw new IllegalArgumentException("通知邮箱不存在: " + id);
+        }
+        repository.setEnabled(id, enabled, OffsetDateTime.now());
+    }
 }

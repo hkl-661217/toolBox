@@ -99,6 +99,12 @@ public class ShippingTrackingService {
         bindingRepository.disable(id, OffsetDateTime.now());
     }
 
+    @Transactional
+    public void enableBinding(long id) {
+        getBinding(id);
+        bindingRepository.enable(id, OffsetDateTime.now());
+    }
+
     public void syncBindingForBatch(ShippingTrackingBinding binding) {
         syncBindingRecord(binding, true);
     }

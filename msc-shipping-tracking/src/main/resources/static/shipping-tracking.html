@@ -262,6 +262,13 @@
       margin-left: 6px;
     }
 
+    button.enable {
+      border-color: rgba(21, 115, 71, 0.3);
+      color: var(--green);
+      background: var(--green-soft);
+      margin-left: 6px;
+    }
+
     #message {
       min-height: 24px;
       margin-top: 14px;
@@ -838,7 +845,9 @@
         <td>
           <div class="actions">
             <button class="secondary" onclick="syncBinding(${row.id})">手动同步</button>
-            <button class="secondary danger" onclick="disableBinding(${row.id})" ${row.enabled === false ? 'disabled' : ''}>停用</button>
+            ${row.enabled === false
+              ? `<button class="secondary enable" onclick="enableBinding(${row.id})">启用</button>`
+              : `<button class="secondary danger" onclick="disableBinding(${row.id})">停用</button>`}
           </div>
         </td>
       </tr>
@@ -869,6 +878,21 @@
         return;
       }
       setMessage('绑定已停用，后续定时任务不会继续查询。', 'success');
+      await loadBindings();
+    } catch (error) {
+      setMessage('操作失败，请检查网络或后端日志。', 'error');
+    }
+  }
+
+  async function enableBinding(id) {
+    setMessage('启用中...', '');
+    try {
+      const response = await fetch(`/api/shipping-tracking/bindings/${id}/enable`, { method: 'POST' });
+      if (!response.ok) {
+        setMessage(await extractErrorMessage(response), 'error');
+        return;
+      }
+      setMessage('绑定已启用，将参与下次定时查询。', 'success');
       await loadBindings();
     } catch (error) {
       setMessage('操作失败，请检查网络或后端日志。', 'error');
@@ -1028,11 +1052,31 @@
         <td class="mono">${formatQueryTime(row.createdAt)}</td>
         <td>
           <div class="actions">
+            ${row.enabled === false
+              ? `<button class="secondary enable" onclick="setAccountEnabled(${row.id}, true)">启用</button>`
+              : `<button class="secondary danger" onclick="setAccountEnabled(${row.id}, false)">停用</button>`}
             <button class="secondary danger" onclick="deleteAccount(${row.id})">删除</button>
           </div>
         </td>
       </tr>
     `).join('');
+  }
+
+  async function setAccountEnabled(id, enabled) {
+    const verb = enabled ? '启用' : '停用';
+    setAccountMessage(verb + '中...', '');
+    try {
+      const path = enabled ? 'enable' : 'disable';
+      const response = await fetch(`/api/shipping-tracking/notification-accounts/${id}/${path}`, { method: 'POST' });
+      if (!response.ok) {
+        setAccountMessage(verb + '失败：' + (await extractErrorMessage(response)), 'error');
+        return;
+      }
+      setAccountMessage('已' + verb + '。', 'success');
+      await loadAccounts();
+    } catch (error) {
+      setAccountMessage(verb + '失败，请查看后端日志。', 'error');
+    }
   }
 
   async function deleteAccount(id) {

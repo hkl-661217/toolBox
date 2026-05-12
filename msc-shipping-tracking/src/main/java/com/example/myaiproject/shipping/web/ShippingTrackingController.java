@@ -49,6 +49,12 @@ public class ShippingTrackingController {
         return ResponseEntity.noContent().build();
     }
 
+    @PostMapping("/{id}/enable")
+    public ResponseEntity<Void> enable(@PathVariable long id) {
+        trackingService.enableBinding(id);
+        return ResponseEntity.noContent().build();
+    }
+
     public record CreateBindingRequest(String orderNo, String bookingNo) {
     }
 

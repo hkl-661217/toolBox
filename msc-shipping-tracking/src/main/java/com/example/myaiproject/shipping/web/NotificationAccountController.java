@@ -39,6 +39,18 @@ public class NotificationAccountController {
         return ResponseEntity.noContent().build();
     }
 
+    @PostMapping("/{id}/enable")
+    public ResponseEntity<Void> enable(@PathVariable long id) {
+        service.setEnabled(id, true);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{id}/disable")
+    public ResponseEntity<Void> disable(@PathVariable long id) {
+        service.setEnabled(id, false);
+        return ResponseEntity.noContent().build();
+    }
+
     public record CreateAccountRequest(String email, String smtpPassword) {
     }
 

@@ -70,6 +70,7 @@ class ShippingTrackingMvpTest {
         jdbcTemplate.update("delete from shipping_tracking_change_log");
         jdbcTemplate.update("delete from shipping_tracking_snapshot");
         jdbcTemplate.update("delete from shipping_tracking_binding");
+        jdbcTemplate.update("delete from shipping_tracking_notification_account");
         fakeClient.reset();
         notificationSender.reset();
     }
@@ -480,6 +481,44 @@ class ShippingTrackingMvpTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("177CAPIDUP1")))
                 .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("ORD-API-DUP")));
+    }
+
+    @Test
+    void enableBindingReactivatesADisabledBinding() {
+        fakeClient.enqueue(success(List.of(event("18/05/2026", "Ningbo, CN", "Loaded", "MSC A"))));
+        ShippingTrackingBinding binding = service.createBinding("ORD-ENABLE", "177CENABLE01");
+        service.disableBinding(binding.id());
+        assertFalse(jdbcTemplate.queryForObject(
+                "select enabled from shipping_tracking_binding where id = ?",
+                Boolean.class,
+                binding.id()));
+
+        service.enableBinding(binding.id());
+
+        assertTrue(jdbcTemplate.queryForObject(
+                "select enabled from shipping_tracking_binding where id = ?",
+                Boolean.class,
+                binding.id()));
+    }
+
+    @Test
+    void enableAndDisableBindingApiToggleEnabledFlag() throws Exception {
+        fakeClient.enqueue(success(List.of(event("18/05/2026", "Ningbo, CN", "Loaded", "MSC A"))));
+        ShippingTrackingBinding binding = service.createBinding("ORD-API-TOGGLE", "177CAPITOGGLE1");
+
+        mockMvc.perform(post("/api/shipping-tracking/bindings/{id}/disable", binding.id()))
+                .andExpect(status().isNoContent());
+        assertFalse(jdbcTemplate.queryForObject(
+                "select enabled from shipping_tracking_binding where id = ?",
+                Boolean.class,
+                binding.id()));
+
+        mockMvc.perform(post("/api/shipping-tracking/bindings/{id}/enable", binding.id()))
+                .andExpect(status().isNoContent());
+        assertTrue(jdbcTemplate.queryForObject(
+                "select enabled from shipping_tracking_binding where id = ?",
+                Boolean.class,
+                binding.id()));
     }
 
     @Test

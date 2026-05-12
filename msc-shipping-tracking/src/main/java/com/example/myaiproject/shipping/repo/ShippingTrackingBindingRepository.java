@@ -99,6 +99,13 @@ public class ShippingTrackingBindingRepository {
                 id);
     }
 
+    public void enable(long id, OffsetDateTime now) {
+        jdbcTemplate.update(
+                "update shipping_tracking_binding set enabled = true, updated_at = ? where id = ?",
+                now,
+                id);
+    }
+
     private static String emptyToNull(String value) {
         return value == null || value.isBlank() ? null : value;
     }

@@ -61,6 +61,14 @@ public class NotificationAccountRepository {
         jdbcTemplate.update("delete from shipping_tracking_notification_account where id = ?", id);
     }
 
+    public void setEnabled(long id, boolean enabled, OffsetDateTime now) {
+        jdbcTemplate.update(
+                "update shipping_tracking_notification_account set enabled = ?, updated_at = ? where id = ?",
+                enabled,
+                now,
+                id);
+    }
+
     private static RowMapper<NotificationAccount> mapper() {
         return (rs, rowNum) -> new NotificationAccount(
                 rs.getLong("id"),
