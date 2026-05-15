@@ -13,5 +13,7 @@ public record ShippingTrackingChangeLog(
         String afterJson,
         boolean emailSent,
         OffsetDateTime emailSentTime,
+        int retryCount,
+        OffsetDateTime lastRetryAt,
         OffsetDateTime createdAt) {
 }
