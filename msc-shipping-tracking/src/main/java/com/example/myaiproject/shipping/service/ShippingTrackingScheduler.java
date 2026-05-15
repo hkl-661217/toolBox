@@ -5,11 +5,15 @@ import com.example.myaiproject.shipping.repo.ShippingTrackingBindingRepository;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 @Service
 public class ShippingTrackingScheduler {
+    private static final Logger log = LoggerFactory.getLogger(ShippingTrackingScheduler.class);
+
     private final ShippingTrackingBindingRepository bindingRepository;
     private final ShippingTrackingService trackingService;
     private final ShippingTrackingProperties properties;
@@ -31,10 +35,7 @@ public class ShippingTrackingScheduler {
             try {
                 trackingService.syncBindingForBatch(binding);
             } catch (Exception error) {
-                System.err.printf(
-                        "Shipping tracking batch failed for binding %d: %s%n",
-                        binding.id(),
-                        error.getMessage());
+                log.warn("Shipping tracking batch failed for binding {}.", binding.id(), error);
             }
             if (i < bindings.size() - 1) {
                 sleepBetweenBindings();
