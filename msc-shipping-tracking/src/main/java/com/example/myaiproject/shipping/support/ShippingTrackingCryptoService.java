@@ -1,5 +1,7 @@
 package com.example.myaiproject.shipping.support;
 
+import com.example.myaiproject.shipping.service.ShippingTrackingProperties;
+import jakarta.annotation.PostConstruct;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
@@ -7,27 +9,60 @@ import java.util.Base64;
 import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Service;
 
 /**
  * AES-GCM-256 encrypt/decrypt for SMTP credentials. Stored values are wrapped as
  * {@code v1:<base64(iv)>:<base64(ciphertext+tag)>} — the version prefix lets future
  * code distinguish encrypted values from legacy plaintext rows.
  */
+@Service
 public class ShippingTrackingCryptoService {
     static final String VERSION_PREFIX = "v1:";
     private static final int IV_LENGTH_BYTES = 12;
     private static final int GCM_TAG_LENGTH_BITS = 128;
     private static final String CIPHER_TRANSFORMATION = "AES/GCM/NoPadding";
 
-    private final SecretKeySpec keySpec;
+    private final String rawKey;
+    private final JdbcTemplate jdbcTemplate;
+    private final SecretKeySpec keySpec; // null when key is not configured
     private final SecureRandom random = new SecureRandom();
 
-    public ShippingTrackingCryptoService(String base64Key) {
-        if (base64Key == null || base64Key.isBlank()) {
-            throw new IllegalStateException(
-                    "shipping.tracking.encryption.key (env SHIPPING_TRACKING_ENCRYPTION_KEY) must be set "
-                    + "to a base64-encoded 32-byte AES key.");
+    @Autowired
+    public ShippingTrackingCryptoService(ShippingTrackingProperties properties, JdbcTemplate jdbcTemplate) {
+        this(properties.getEncryptionKey(), jdbcTemplate);
+    }
+
+    // Package-private for unit tests that don't want a JdbcTemplate.
+    ShippingTrackingCryptoService(String base64Key) {
+        this(base64Key, null);
+    }
+
+    ShippingTrackingCryptoService(String base64Key, JdbcTemplate jdbcTemplate) {
+        this.rawKey = base64Key == null ? "" : base64Key;
+        this.jdbcTemplate = jdbcTemplate;
+        this.keySpec = this.rawKey.isBlank() ? null : buildKeySpec(this.rawKey);
+    }
+
+    @PostConstruct
+    void verifyKeyAvailableIfEncryptedRowsExist() {
+        if (jdbcTemplate == null) {
+            return;
         }
+        Integer encryptedCount = jdbcTemplate.queryForObject(
+                "select count(*) from shipping_tracking_notification_account where smtp_password like 'v1:%'",
+                Integer.class);
+        if (encryptedCount != null && encryptedCount > 0 && keySpec == null) {
+            throw new IllegalStateException(
+                    "shipping_tracking_notification_account contains " + encryptedCount
+                    + " encrypted row(s) but shipping.tracking.encryption.key is not set. "
+                    + "Refusing to start to avoid silently treating ciphertext as plaintext.");
+        }
+    }
+
+    private static SecretKeySpec buildKeySpec(String base64Key) {
         byte[] keyBytes;
         try {
             keyBytes = Base64.getDecoder().decode(base64Key);
@@ -40,12 +75,16 @@ public class ShippingTrackingCryptoService {
                     "shipping.tracking.encryption.key must decode to 32 bytes (was "
                     + keyBytes.length + ").");
         }
-        this.keySpec = new SecretKeySpec(keyBytes, "AES");
+        return new SecretKeySpec(keyBytes, "AES");
     }
 
     public String encrypt(String plaintext) {
         if (plaintext == null) {
             throw new IllegalArgumentException("plaintext must not be null");
+        }
+        if (keySpec == null) {
+            throw new IllegalStateException(
+                    "shipping.tracking.encryption.key is not set; cannot encrypt new credentials.");
         }
         byte[] iv = new byte[IV_LENGTH_BYTES];
         random.nextBytes(iv);
@@ -68,6 +107,10 @@ public class ShippingTrackingCryptoService {
         }
         if (!stored.startsWith(VERSION_PREFIX)) {
             return stored;
+        }
+        if (keySpec == null) {
+            throw new IllegalStateException(
+                    "shipping.tracking.encryption.key is not set; cannot decrypt 'v1:' value.");
         }
         String body = stored.substring(VERSION_PREFIX.length());
         int colon = body.indexOf(':');

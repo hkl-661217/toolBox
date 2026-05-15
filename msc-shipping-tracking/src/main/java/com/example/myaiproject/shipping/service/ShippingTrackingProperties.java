@@ -19,6 +19,7 @@ public class ShippingTrackingProperties {
     private String pythonExecutable = "python3";
     private String pythonScriptPath = "scripts/msc_tracking_query.py";
     private long curlImpersonateTimeoutMs = 90_000L;
+    private String encryptionKey = "";
 
     public String getNotifyEmails() {
         return notifyEmails;
@@ -122,6 +123,14 @@ public class ShippingTrackingProperties {
 
     public void setCurlImpersonateTimeoutMs(long curlImpersonateTimeoutMs) {
         this.curlImpersonateTimeoutMs = curlImpersonateTimeoutMs;
+    }
+
+    public String getEncryptionKey() {
+        return encryptionKey;
+    }
+
+    public void setEncryptionKey(String encryptionKey) {
+        this.encryptionKey = encryptionKey;
     }
 
     public List<String> notifyEmailList() {
