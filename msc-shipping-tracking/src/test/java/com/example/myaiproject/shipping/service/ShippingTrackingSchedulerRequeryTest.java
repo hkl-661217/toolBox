@@ -87,7 +87,8 @@ class ShippingTrackingSchedulerRequeryTest {
 
         RecordingService() {
             super(null, null, null, null, null, null, null, null, null,
-                    new org.springframework.jdbc.datasource.DataSourceTransactionManager());
+                    new org.springframework.jdbc.datasource.DataSourceTransactionManager(),
+                    new ShippingTrackingMetrics(new io.micrometer.core.instrument.simple.SimpleMeterRegistry()));
         }
 
         @Override

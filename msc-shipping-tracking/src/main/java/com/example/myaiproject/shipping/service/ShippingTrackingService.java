@@ -36,6 +36,7 @@ public class ShippingTrackingService {
     private final ShippingTrackingEmailTemplateBuilder emailTemplateBuilder;
     private final ObjectMapper objectMapper;
     private final TransactionTemplate transactionTemplate;
+    private final ShippingTrackingMetrics metrics;
 
     public ShippingTrackingService(
             ShippingTrackingBindingRepository bindingRepository,
@@ -47,7 +48,8 @@ public class ShippingTrackingService {
             NotificationAccountService notificationAccountService,
             ShippingTrackingEmailTemplateBuilder emailTemplateBuilder,
             ObjectMapper objectMapper,
-            PlatformTransactionManager transactionManager) {
+            PlatformTransactionManager transactionManager,
+            ShippingTrackingMetrics metrics) {
         this.bindingRepository = bindingRepository;
         this.snapshotRepository = snapshotRepository;
         this.changeLogRepository = changeLogRepository;
@@ -58,6 +60,7 @@ public class ShippingTrackingService {
         this.emailTemplateBuilder = emailTemplateBuilder;
         this.objectMapper = objectMapper;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
+        this.metrics = metrics;
     }
 
     public ShippingTrackingBinding createBinding(String orderNo, String bookingNo) {
@@ -125,6 +128,7 @@ public class ShippingTrackingService {
         return transactionTemplate.execute(status -> {
             OffsetDateTime now = OffsetDateTime.now();
             String snapshotStatus = snapshotStatus(queryResult.status());
+            metrics.recordQuery(snapshotStatus);
             ShippingTrackingSnapshot previousSuccess = "SUCCESS".equals(snapshotStatus)
                     ? snapshotRepository.findLatestSuccess(binding.id()).orElse(null)
                     : null;
@@ -196,6 +200,7 @@ public class ShippingTrackingService {
         } catch (Exception error) {
             log.warn("Failed to send shipping tracking notification for binding {}.", binding.id(), error);
         }
+        metrics.recordEmail(emailSent ? "sent" : "failed");
         boolean finalEmailSent = emailSent;
         OffsetDateTime finalEmailSentTime = emailSentTime;
         transactionTemplate.executeWithoutResult(status -> changeLogRepository.insert(

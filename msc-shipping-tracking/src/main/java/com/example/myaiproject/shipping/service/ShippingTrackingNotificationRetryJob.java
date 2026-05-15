@@ -33,6 +33,7 @@ public class ShippingTrackingNotificationRetryJob {
     private final ShippingTrackingEmailTemplateBuilder templateBuilder;
     private final ObjectMapper objectMapper;
     private final ShippingTrackingProperties properties;
+    private final ShippingTrackingMetrics metrics;
 
     public ShippingTrackingNotificationRetryJob(
             ShippingTrackingChangeLogRepository changeLogRepository,
@@ -41,7 +42,8 @@ public class ShippingTrackingNotificationRetryJob {
             NotificationAccountService accountService,
             ShippingTrackingEmailTemplateBuilder templateBuilder,
             ObjectMapper objectMapper,
-            ShippingTrackingProperties properties) {
+            ShippingTrackingProperties properties,
+            ShippingTrackingMetrics metrics) {
         this.changeLogRepository = changeLogRepository;
         this.bindingRepository = bindingRepository;
         this.sender = sender;
@@ -49,6 +51,7 @@ public class ShippingTrackingNotificationRetryJob {
         this.templateBuilder = templateBuilder;
         this.objectMapper = objectMapper;
         this.properties = properties;
+        this.metrics = metrics;
     }
 
     @Scheduled(cron = "${shipping.tracking.retry-cron:0 */15 * * * *}")
@@ -106,8 +109,10 @@ public class ShippingTrackingNotificationRetryJob {
         OffsetDateTime now = OffsetDateTime.now();
         if (delivered) {
             changeLogRepository.markEmailSent(row.id(), now);
+            metrics.recordEmail("sent_retry");
         } else {
             changeLogRepository.bumpRetryCount(row.id(), now);
+            metrics.recordEmail("failed_retry");
         }
     }
 
@@ -171,6 +176,7 @@ public class ShippingTrackingNotificationRetryJob {
                     properties.getRetryMaxAgeHours());
             try {
                 changeLogRepository.markGivenUp(row.id(), now);
+                metrics.recordEmail("given_up");
             } catch (Exception error) {
                 log.error("Failed to mark change_log {} as given up.", row.id(), error);
             }

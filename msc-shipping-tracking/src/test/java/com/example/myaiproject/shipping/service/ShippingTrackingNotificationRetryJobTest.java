@@ -12,6 +12,7 @@ import com.example.myaiproject.shipping.notify.TrackingNotificationSender;
 import com.example.myaiproject.shipping.repo.ShippingTrackingBindingRepository;
 import com.example.myaiproject.shipping.repo.ShippingTrackingChangeLogRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -37,6 +38,8 @@ class ShippingTrackingNotificationRetryJobTest {
         assertEquals(0, fx.sender.sendAsCalls);
         assertEquals(List.of(42L), fx.changeLogRepo.marked);
         assertEquals(List.of(), fx.changeLogRepo.bumped);
+        assertEquals(1.0, fx.meterRegistry.counter(
+                ShippingTrackingMetrics.EMAIL, "outcome", "sent_retry").count());
     }
 
     @Test
@@ -126,6 +129,8 @@ class ShippingTrackingNotificationRetryJobTest {
         final ShippingTrackingEmailTemplateBuilder templateBuilder = new ShippingTrackingEmailTemplateBuilder();
         final ObjectMapper objectMapper = new ObjectMapper();
         final ShippingTrackingProperties properties = new ShippingTrackingProperties();
+        final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+        final ShippingTrackingMetrics metrics = new ShippingTrackingMetrics(meterRegistry);
         final ShippingTrackingBinding binding;
         final ShippingTrackingNotificationRetryJob job;
 
@@ -139,7 +144,7 @@ class ShippingTrackingNotificationRetryJobTest {
             assertNotNull(binding);
             job = new ShippingTrackingNotificationRetryJob(
                     changeLogRepo, bindingRepo, sender, accountService, templateBuilder,
-                    objectMapper, properties);
+                    objectMapper, properties, metrics);
         }
 
         ShippingTrackingChangeLog changeLogRow(long id, int retryCount) {
