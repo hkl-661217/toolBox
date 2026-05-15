@@ -9,6 +9,10 @@ import java.util.Base64;
 import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
+import java.util.List;
+import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -24,6 +28,8 @@ public class ShippingTrackingCryptoService {
     private static final int IV_LENGTH_BYTES = 12;
     private static final int GCM_TAG_LENGTH_BITS = 128;
     private static final String CIPHER_TRANSFORMATION = "AES/GCM/NoPadding";
+
+    private static final Logger log = LoggerFactory.getLogger(ShippingTrackingCryptoService.class);
 
     private final String rawKey;
     private final JdbcTemplate jdbcTemplate;
@@ -60,6 +66,41 @@ public class ShippingTrackingCryptoService {
                     + " encrypted row(s) but shipping.tracking.encryption.key is not set. "
                     + "Refusing to start to avoid silently treating ciphertext as plaintext.");
         }
+
+        migratePlaintextRows();
+    }
+
+    /**
+     * One-shot migration: any notification-account row whose smtp_password is not
+     * already {@code v1:}-prefixed gets encrypted in place. If plaintext rows exist
+     * but the key isn't configured, fail-fast so users can't keep running with
+     * cleartext credentials silently.
+     */
+    void migratePlaintextRows() {
+        if (jdbcTemplate == null) {
+            return;
+        }
+        List<Map<String, Object>> plaintextRows = jdbcTemplate.queryForList(
+                "select id, smtp_password from shipping_tracking_notification_account "
+                        + "where smtp_password is not null and smtp_password not like 'v1:%'");
+        if (plaintextRows.isEmpty()) {
+            return;
+        }
+        if (keySpec == null) {
+            throw new IllegalStateException(
+                    "shipping_tracking_notification_account contains " + plaintextRows.size()
+                    + " plaintext row(s) but shipping.tracking.encryption.key is not set. "
+                    + "Set the key so credentials can be encrypted at startup.");
+        }
+        for (Map<String, Object> row : plaintextRows) {
+            long id = ((Number) row.get("id")).longValue();
+            String plaintext = (String) row.get("smtp_password");
+            jdbcTemplate.update(
+                    "update shipping_tracking_notification_account set smtp_password = ? where id = ?",
+                    encrypt(plaintext),
+                    id);
+        }
+        log.info("Encrypted {} legacy plaintext smtp_password row(s) at startup.", plaintextRows.size());
     }
 
     private static SecretKeySpec buildKeySpec(String base64Key) {
