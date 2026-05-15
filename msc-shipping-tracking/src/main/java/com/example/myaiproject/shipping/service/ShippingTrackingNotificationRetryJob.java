@@ -14,6 +14,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -65,9 +68,13 @@ public class ShippingTrackingNotificationRetryJob {
         }
         log.info("Email retry cycle scanning {} pending change_log row(s).", pending.size());
 
+        List<Long> bindingIds = pending.stream().map(ShippingTrackingChangeLog::bindingId).distinct().toList();
+        Map<Long, ShippingTrackingBinding> bindingsById = bindingRepository.findByIds(bindingIds).stream()
+                .collect(Collectors.toMap(ShippingTrackingBinding::id, Function.identity()));
+
         for (ShippingTrackingChangeLog row : pending) {
             try {
-                attemptOne(row);
+                attemptOne(row, bindingsById.get(row.bindingId()));
             } catch (Exception error) {
                 log.warn("Retry attempt threw for change_log id {}; bumping count.", row.id(), error);
                 safeBumpRetry(row.id());
@@ -75,8 +82,7 @@ public class ShippingTrackingNotificationRetryJob {
         }
     }
 
-    private void attemptOne(ShippingTrackingChangeLog row) {
-        ShippingTrackingBinding binding = bindingRepository.findById(row.bindingId()).orElse(null);
+    private void attemptOne(ShippingTrackingChangeLog row, ShippingTrackingBinding binding) {
         if (binding == null) {
             log.warn("Skipping retry for change_log {}: binding {} no longer exists.",
                     row.id(), row.bindingId());

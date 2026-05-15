@@ -5,8 +5,10 @@ import com.example.myaiproject.shipping.support.ShippingTrackingFieldSanitizer;
 import java.sql.PreparedStatement;
 import java.sql.Statement;
 import java.time.OffsetDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
@@ -44,6 +46,17 @@ public class ShippingTrackingBindingRepository {
                 mapper(),
                 id);
         return rows.stream().findFirst();
+    }
+
+    public List<ShippingTrackingBinding> findByIds(Collection<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return List.of();
+        }
+        String placeholders = ids.stream().map(i -> "?").collect(Collectors.joining(","));
+        return jdbcTemplate.query(
+                "select * from shipping_tracking_binding where id in (" + placeholders + ")",
+                mapper(),
+                ids.toArray());
     }
 
     public Optional<ShippingTrackingBinding> findByOrderNo(String orderNo) {

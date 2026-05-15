@@ -14,6 +14,7 @@ import com.example.myaiproject.shipping.repo.ShippingTrackingChangeLogRepository
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -69,6 +70,23 @@ class ShippingTrackingNotificationRetryJobTest {
         assertEquals(2, fx.sender.sendAsCalls);
         assertEquals(0, fx.sender.sendCalls);
         assertEquals(List.of(7L), fx.changeLogRepo.marked);
+    }
+
+    @Test
+    void bindingsAreFetchedInASingleBatchEvenWithManyRows() {
+        Fixtures fx = new Fixtures();
+        List<ShippingTrackingChangeLog> manyRows = new ArrayList<>();
+        for (long i = 1; i <= 5; i++) {
+            manyRows.add(fx.changeLogRow(i, 0));
+        }
+        fx.changeLogRepo.pending = manyRows;
+        fx.bindingRepo.byId.put(fx.binding.id(), fx.binding);
+        fx.sender.sendReturn = true;
+
+        fx.job.runRetryCycle();
+
+        assertEquals(1, fx.bindingRepo.findByIdsCalls,
+                "five pending rows pointing at the same binding should trigger exactly one batch lookup");
     }
 
     @Test
@@ -152,6 +170,7 @@ class ShippingTrackingNotificationRetryJobTest {
 
     private static class FakeBindingRepo extends ShippingTrackingBindingRepository {
         final Map<Long, ShippingTrackingBinding> byId = new HashMap<>();
+        int findByIdsCalls = 0;
 
         FakeBindingRepo() {
             super(new JdbcTemplate());
@@ -160,6 +179,12 @@ class ShippingTrackingNotificationRetryJobTest {
         @Override
         public Optional<ShippingTrackingBinding> findById(long id) {
             return Optional.ofNullable(byId.get(id));
+        }
+
+        @Override
+        public List<ShippingTrackingBinding> findByIds(Collection<Long> ids) {
+            findByIdsCalls++;
+            return ids.stream().map(byId::get).filter(java.util.Objects::nonNull).toList();
         }
     }
 
