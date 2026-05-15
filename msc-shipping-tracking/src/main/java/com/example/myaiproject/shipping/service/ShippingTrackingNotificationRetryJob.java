@@ -60,6 +60,9 @@ public class ShippingTrackingNotificationRetryJob {
     void runRetryCycle() {
         OffsetDateTime now = OffsetDateTime.now();
         OffsetDateTime ageCutoff = now.minusHours(properties.getRetryMaxAgeHours());
+
+        markAgedOutRows(ageCutoff, now);
+
         List<ShippingTrackingChangeLog> pending = changeLogRepository.findPendingRetries(
                 properties.getRetryMaxAttempts(),
                 ageCutoff);
@@ -153,6 +156,24 @@ public class ShippingTrackingNotificationRetryJob {
             changeLogRepository.bumpRetryCount(id, OffsetDateTime.now());
         } catch (Exception bumpError) {
             log.error("Failed to bump retry_count for change_log {}.", id, bumpError);
+        }
+    }
+
+    private void markAgedOutRows(OffsetDateTime ageCutoff, OffsetDateTime now) {
+        List<ShippingTrackingChangeLog> aged = changeLogRepository.findAgedOut(ageCutoff);
+        if (aged.isEmpty()) {
+            return;
+        }
+        for (ShippingTrackingChangeLog row : aged) {
+            log.warn("Giving up on change_log id={} binding_id={} created_at={} retry_count={}; "
+                            + "exceeded retry window of {}h without a successful email.",
+                    row.id(), row.bindingId(), row.createdAt(), row.retryCount(),
+                    properties.getRetryMaxAgeHours());
+            try {
+                changeLogRepository.markGivenUp(row.id(), now);
+            } catch (Exception error) {
+                log.error("Failed to mark change_log {} as given up.", row.id(), error);
+            }
         }
     }
 }

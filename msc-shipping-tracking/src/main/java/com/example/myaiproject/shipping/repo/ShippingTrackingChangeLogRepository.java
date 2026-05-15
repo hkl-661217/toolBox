@@ -70,6 +70,7 @@ public class ShippingTrackingChangeLogRepository {
         return jdbcTemplate.query("""
                 select * from shipping_tracking_change_log
                 where email_sent = false
+                  and give_up_at is null
                   and retry_count < ?
                   and created_at >= ?
                 order by created_at asc
@@ -77,6 +78,30 @@ public class ShippingTrackingChangeLogRepository {
                 mapper(),
                 maxAttempts,
                 ageCutoff);
+    }
+
+    /**
+     * Returns rows whose email never went through and which have aged past the
+     * retry window, but have not yet been marked as given up. Caller is
+     * expected to log and call {@link #markGivenUp}.
+     */
+    public List<ShippingTrackingChangeLog> findAgedOut(OffsetDateTime ageCutoff) {
+        return jdbcTemplate.query("""
+                select * from shipping_tracking_change_log
+                where email_sent = false
+                  and give_up_at is null
+                  and created_at < ?
+                order by created_at asc
+                """,
+                mapper(),
+                ageCutoff);
+    }
+
+    public void markGivenUp(long id, OffsetDateTime at) {
+        jdbcTemplate.update(
+                "update shipping_tracking_change_log set give_up_at = ? where id = ?",
+                at,
+                id);
     }
 
     public void markEmailSent(long id, OffsetDateTime sentAt) {
@@ -118,6 +143,7 @@ public class ShippingTrackingChangeLogRepository {
                 rs.getObject("email_sent_time", OffsetDateTime.class),
                 rs.getInt("retry_count"),
                 rs.getObject("last_retry_at", OffsetDateTime.class),
+                rs.getObject("give_up_at", OffsetDateTime.class),
                 rs.getObject("created_at", OffsetDateTime.class));
     }
 }

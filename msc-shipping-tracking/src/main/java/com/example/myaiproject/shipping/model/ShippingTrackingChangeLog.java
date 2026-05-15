@@ -15,5 +15,6 @@ public record ShippingTrackingChangeLog(
         OffsetDateTime emailSentTime,
         int retryCount,
         OffsetDateTime lastRetryAt,
+        OffsetDateTime giveUpAt,
         OffsetDateTime createdAt) {
 }

@@ -90,6 +90,20 @@ class ShippingTrackingNotificationRetryJobTest {
     }
 
     @Test
+    void agedOutRowsAreMarkedGivenUpAndNotRetried() {
+        Fixtures fx = new Fixtures();
+        ShippingTrackingChangeLog agedRow = fx.changeLogRow(123L, 0);
+        fx.changeLogRepo.aged = List.of(agedRow);
+        // pending stays empty — aged rows are excluded from the retry pool
+
+        fx.job.runRetryCycle();
+
+        assertEquals(List.of(123L), fx.changeLogRepo.givenUp);
+        assertEquals(0, fx.sender.sendCalls);
+        assertEquals(0, fx.sender.sendAsCalls);
+    }
+
+    @Test
     void rowWithoutKnownBindingIsSkippedSafely() {
         Fixtures fx = new Fixtures();
         fx.changeLogRepo.pending = List.of(fx.changeLogRow(11L, 1));
@@ -139,14 +153,17 @@ class ShippingTrackingNotificationRetryJobTest {
                     null,
                     retryCount,
                     null,
+                    null,
                     OffsetDateTime.now().minusHours(1));
         }
     }
 
     private static class FakeChangeLogRepo extends ShippingTrackingChangeLogRepository {
         List<ShippingTrackingChangeLog> pending = List.of();
+        List<ShippingTrackingChangeLog> aged = List.of();
         final List<Long> marked = new ArrayList<>();
         final List<Long> bumped = new ArrayList<>();
+        final List<Long> givenUp = new ArrayList<>();
 
         FakeChangeLogRepo() {
             super(new JdbcTemplate());
@@ -158,6 +175,11 @@ class ShippingTrackingNotificationRetryJobTest {
         }
 
         @Override
+        public List<ShippingTrackingChangeLog> findAgedOut(OffsetDateTime ageCutoff) {
+            return aged;
+        }
+
+        @Override
         public void markEmailSent(long id, OffsetDateTime sentAt) {
             marked.add(id);
         }
@@ -165,6 +187,11 @@ class ShippingTrackingNotificationRetryJobTest {
         @Override
         public void bumpRetryCount(long id, OffsetDateTime attemptAt) {
             bumped.add(id);
+        }
+
+        @Override
+        public void markGivenUp(long id, OffsetDateTime at) {
+            givenUp.add(id);
         }
     }
 

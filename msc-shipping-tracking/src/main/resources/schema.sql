@@ -92,8 +92,10 @@ comment on column shipping_tracking_change_log.created_at is '创建时间';
 
 alter table shipping_tracking_change_log add column if not exists retry_count int not null default 0;
 alter table shipping_tracking_change_log add column if not exists last_retry_at timestamp with time zone;
+alter table shipping_tracking_change_log add column if not exists give_up_at timestamp with time zone;
 comment on column shipping_tracking_change_log.retry_count is '邮件重发次数（首次失败计为 0，每次补偿 +1）';
 comment on column shipping_tracking_change_log.last_retry_at is '最近一次重发尝试时间（含失败）';
+comment on column shipping_tracking_change_log.give_up_at is '超过重试窗口后由 RetryJob 标记的放弃时间，配合 WARN 日志审计';
 
 create index if not exists idx_change_log_pending_retry
     on shipping_tracking_change_log (email_sent, retry_count, created_at);

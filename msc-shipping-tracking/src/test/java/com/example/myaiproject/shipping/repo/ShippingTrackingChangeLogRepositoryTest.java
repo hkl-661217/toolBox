@@ -66,6 +66,36 @@ class ShippingTrackingChangeLogRepositoryTest {
     }
 
     @Test
+    void findAgedOutReturnsOnlyUnsentRowsPastWindowAndNotYetGivenUp() {
+        long agedId        = seedChangeLog(false, 0, OffsetDateTime.now().minusHours(30));
+        long freshId       = seedChangeLog(false, 0, OffsetDateTime.now().minusHours(2));
+        long agedButSentId = seedChangeLog(true,  0, OffsetDateTime.now().minusHours(30));
+
+        OffsetDateTime ageCutoff = OffsetDateTime.now().minusHours(24);
+        List<Long> ids = changeLogRepository.findAgedOut(ageCutoff).stream()
+                .map(ShippingTrackingChangeLog::id).toList();
+
+        assertEquals(List.of(agedId), ids);
+        assertTrue(!ids.contains(freshId));
+        assertTrue(!ids.contains(agedButSentId));
+
+        changeLogRepository.markGivenUp(agedId, OffsetDateTime.now());
+        assertEquals(0, changeLogRepository.findAgedOut(ageCutoff).size(),
+                "already-marked rows should not be returned again");
+    }
+
+    @Test
+    void givenUpRowsAreExcludedFromPendingRetries() {
+        long id = seedChangeLog(false, 0, OffsetDateTime.now().minusHours(2));
+        changeLogRepository.markGivenUp(id, OffsetDateTime.now());
+
+        List<ShippingTrackingChangeLog> pending = changeLogRepository.findPendingRetries(
+                6,
+                OffsetDateTime.now().minusHours(24));
+        assertEquals(0, pending.size(), "give_up_at IS NOT NULL must shield rows from retry");
+    }
+
+    @Test
     void bumpRetryCountIncrementsWithoutFlippingSent() {
         long id = seedChangeLog(false, 1, OffsetDateTime.now().minusHours(1));
 
