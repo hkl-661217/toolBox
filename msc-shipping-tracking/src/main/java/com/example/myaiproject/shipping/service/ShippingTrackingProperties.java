@@ -20,6 +20,9 @@ public class ShippingTrackingProperties {
     private String pythonScriptPath = "scripts/msc_tracking_query.py";
     private long curlImpersonateTimeoutMs = 90_000L;
     private String encryptionKey = "";
+    private String retryCron = "0 */15 * * * *";
+    private int retryMaxAttempts = 6;
+    private int retryMaxAgeHours = 24;
 
     public String getNotifyEmails() {
         return notifyEmails;
@@ -131,6 +134,30 @@ public class ShippingTrackingProperties {
 
     public void setEncryptionKey(String encryptionKey) {
         this.encryptionKey = encryptionKey;
+    }
+
+    public String getRetryCron() {
+        return retryCron;
+    }
+
+    public void setRetryCron(String retryCron) {
+        this.retryCron = retryCron;
+    }
+
+    public int getRetryMaxAttempts() {
+        return retryMaxAttempts;
+    }
+
+    public void setRetryMaxAttempts(int retryMaxAttempts) {
+        this.retryMaxAttempts = retryMaxAttempts;
+    }
+
+    public int getRetryMaxAgeHours() {
+        return retryMaxAgeHours;
+    }
+
+    public void setRetryMaxAgeHours(int retryMaxAgeHours) {
+        this.retryMaxAgeHours = retryMaxAgeHours;
     }
 
     public List<String> notifyEmailList() {
