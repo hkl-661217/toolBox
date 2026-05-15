@@ -54,8 +54,20 @@ create table if not exists shipping_tracking_change_log (
     constraint fk_shipping_tracking_change_log_current_snapshot foreign key (current_snapshot_id) references shipping_tracking_snapshot (id)
 ) engine=innodb default charset=utf8mb4 collate=utf8mb4_0900_ai_ci comment='海运轨迹变化记录表';
 
-create index if not exists idx_change_log_pending_retry
-    on shipping_tracking_change_log (email_sent, retry_count, created_at);
+-- MySQL 8 does not support `CREATE INDEX IF NOT EXISTS`, so probe
+-- information_schema and PREPARE conditionally.
+set @idx_exists = (
+    select count(*) from information_schema.statistics
+    where table_schema = database()
+      and table_name = 'shipping_tracking_change_log'
+      and index_name = 'idx_change_log_pending_retry'
+);
+set @ddl = if(@idx_exists = 0,
+    'create index idx_change_log_pending_retry on shipping_tracking_change_log (email_sent, retry_count, created_at)',
+    'select 1');
+prepare stmt from @ddl;
+execute stmt;
+deallocate prepare stmt;
 
 create table if not exists shipping_tracking_notification_account (
     id bigint not null auto_increment,
