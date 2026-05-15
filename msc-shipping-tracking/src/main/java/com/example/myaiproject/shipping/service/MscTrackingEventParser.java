@@ -4,11 +4,23 @@ import com.example.myaiproject.shipping.model.ShippingTrackingEvent;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 @Component
 public class MscTrackingEventParser {
+    private static final Logger log = LoggerFactory.getLogger(MscTrackingEventParser.class);
     private static final Pattern DATE_LINE = Pattern.compile("\\d{1,2}/\\d{1,2}/\\d{4}|20\\d{2}[-/.]\\d{1,2}[-/.]\\d{1,2}");
+    // Pages shorter than this are typically empty/error stubs — header miss isn't worth alerting on.
+    private static final int SUBSTANTIAL_PAGE_CHARS = 200;
+    private static final int RAW_TEXT_EXCERPT_CHARS = 1024;
+
+    private final ShippingTrackingMetrics metrics;
+
+    public MscTrackingEventParser(ShippingTrackingMetrics metrics) {
+        this.metrics = metrics;
+    }
 
     public List<ShippingTrackingEvent> parse(String rawText) {
         if (rawText == null || rawText.isBlank()) {
@@ -18,6 +30,15 @@ public class MscTrackingEventParser {
         List<String> lines = normalizeLines(rawText);
         int tableStart = findEventTableStart(lines);
         if (tableStart < 0) {
+            if (rawText.length() >= SUBSTANTIAL_PAGE_CHARS) {
+                metrics.recordParserFailure("header_not_found");
+                log.warn("MSC tracking parser could not find the event-table header "
+                                + "(rawText {} chars). MSC may have changed the page structure. "
+                                + "Excerpt (first {} chars): {}",
+                        rawText.length(),
+                        RAW_TEXT_EXCERPT_CHARS,
+                        excerpt(rawText));
+            }
             return List.of();
         }
 
@@ -65,5 +86,12 @@ public class MscTrackingEventParser {
             }
         }
         return lines;
+    }
+
+    private static String excerpt(String text) {
+        if (text.length() <= RAW_TEXT_EXCERPT_CHARS) {
+            return text;
+        }
+        return text.substring(0, RAW_TEXT_EXCERPT_CHARS) + "…(truncated)";
     }
 }
