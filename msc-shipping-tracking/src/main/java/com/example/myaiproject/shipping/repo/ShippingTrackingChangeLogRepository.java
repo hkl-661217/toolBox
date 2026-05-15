@@ -1,9 +1,13 @@
 package com.example.myaiproject.shipping.repo;
 
+import com.example.myaiproject.shipping.model.ShippingTrackingChangeLog;
 import java.sql.PreparedStatement;
 import java.sql.Statement;
 import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.Optional;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Repository;
@@ -48,5 +52,72 @@ public class ShippingTrackingChangeLogRepository {
             return statement;
         }, keyHolder);
         return keyHolder.getKey().longValue();
+    }
+
+    public Optional<ShippingTrackingChangeLog> findById(long id) {
+        List<ShippingTrackingChangeLog> rows = jdbcTemplate.query(
+                "select * from shipping_tracking_change_log where id = ?",
+                mapper(),
+                id);
+        return rows.stream().findFirst();
+    }
+
+    /**
+     * Returns rows that still need an email sent, are within the retry window,
+     * and have not yet hit the attempt cap. Ordered oldest-first.
+     */
+    public List<ShippingTrackingChangeLog> findPendingRetries(int maxAttempts, OffsetDateTime ageCutoff) {
+        return jdbcTemplate.query("""
+                select * from shipping_tracking_change_log
+                where email_sent = false
+                  and retry_count < ?
+                  and created_at >= ?
+                order by created_at asc
+                """,
+                mapper(),
+                maxAttempts,
+                ageCutoff);
+    }
+
+    public void markEmailSent(long id, OffsetDateTime sentAt) {
+        jdbcTemplate.update("""
+                update shipping_tracking_change_log
+                set email_sent = true,
+                    email_sent_time = ?,
+                    retry_count = retry_count + 1,
+                    last_retry_at = ?
+                where id = ?
+                """,
+                sentAt,
+                sentAt,
+                id);
+    }
+
+    public void bumpRetryCount(long id, OffsetDateTime attemptAt) {
+        jdbcTemplate.update("""
+                update shipping_tracking_change_log
+                set retry_count = retry_count + 1,
+                    last_retry_at = ?
+                where id = ?
+                """,
+                attemptAt,
+                id);
+    }
+
+    private static RowMapper<ShippingTrackingChangeLog> mapper() {
+        return (rs, rowNum) -> new ShippingTrackingChangeLog(
+                rs.getLong("id"),
+                rs.getLong("binding_id"),
+                rs.getLong("previous_snapshot_id"),
+                rs.getLong("current_snapshot_id"),
+                rs.getString("change_type"),
+                rs.getString("change_summary"),
+                rs.getString("before_json"),
+                rs.getString("after_json"),
+                rs.getBoolean("email_sent"),
+                rs.getObject("email_sent_time", OffsetDateTime.class),
+                rs.getInt("retry_count"),
+                rs.getObject("last_retry_at", OffsetDateTime.class),
+                rs.getObject("created_at", OffsetDateTime.class));
     }
 }
