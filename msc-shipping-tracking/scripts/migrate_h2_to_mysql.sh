@@ -29,49 +29,22 @@ mkdir -p "$BACKUP_DIR"
 cp -f "$H2_DIR/shipping-tracking.mv.db" "$BACKUP_DIR/shipping-tracking.mv.db.$TS"
 echo "Backed up H2 to $BACKUP_DIR/shipping-tracking.mv.db.$TS"
 
-# 2. Dump everything from H2 to SQL using H2's own Script tool. The fat app
-#    jar already contains org.h2.tools.Script.
-DUMP="/tmp/msc-h2-dump-$TS.sql"
-java -cp "$JAR_PATH" -Dloader.main=org.h2.tools.Script org.springframework.boot.loader.launch.PropertiesLauncher \
-    -url "jdbc:h2:file:$H2_FILE;MODE=MySQL;DATABASE_TO_UPPER=false;IFEXISTS=TRUE" \
-    -user sa \
-    -script "$DUMP" \
-    || java -cp "$JAR_PATH" org.h2.tools.Script \
-        -url "jdbc:h2:file:$H2_FILE;MODE=MySQL;DATABASE_TO_UPPER=false;IFEXISTS=TRUE" \
-        -user sa \
-        -script "$DUMP"
-echo "Dumped H2 to $DUMP"
+# 2. Run the bundled JDBC-to-JDBC migrator. Both H2 and MySQL drivers are
+#    on the fat jar's classpath, so we just point Spring Boot's loader at
+#    MigrateH2ToMysql#main with positional args.
+MYSQL_URL=${MYSQL_URL:-"jdbc:mysql://127.0.0.1:3306/$DB_NAME?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true"}
+: "${MYSQL_USER:?must set MYSQL_USER}"
+: "${MYSQL_PASS:?must set MYSQL_PASS}"
 
-# 3. Keep only the INSERTs that target our four tables. H2's dump also
-#    includes CREATE TABLE / ALTER and other statements we don't want — the
-#    MySQL schema is already in place via schema-mysql.sql on app startup.
-INSERTS="/tmp/msc-mysql-inserts-$TS.sql"
-grep -iE '^INSERT INTO "?(SHIPPING_TRACKING_BINDING|SHIPPING_TRACKING_SNAPSHOT|SHIPPING_TRACKING_CHANGE_LOG|SHIPPING_TRACKING_NOTIFICATION_ACCOUNT)"?' "$DUMP" \
-    > "$INSERTS"
-# H2 quotes identifiers with double quotes; MySQL needs backticks. Lowercase
-# them while we're here to match the MySQL schema's lowercase table names.
-sed -i -E 's/"([A-Z_]+)"/`\L\1`/g' "$INSERTS"
-echo "Extracted $(wc -l < "$INSERTS") INSERT statements into $INSERTS"
+java -cp "$JAR_PATH" \
+    -Dloader.main=com.example.myaiproject.shipping.migration.MigrateH2ToMysql \
+    org.springframework.boot.loader.launch.PropertiesLauncher \
+    "jdbc:h2:file:$H2_FILE;MODE=MySQL;DATABASE_TO_UPPER=false;IFEXISTS=TRUE;ACCESS_MODE_DATA=r" \
+    "$MYSQL_URL" \
+    "$MYSQL_USER" \
+    "$MYSQL_PASS"
 
-# 4. Load into MySQL. FK constraints make the order matter (parent before
-#    child) — H2 dumps in alphabetical-ish order which is fine since
-#    binding < change_log < notification_account < snapshot would break.
-#    Disable FK checks during the bulk load and re-enable after.
-mysql "$DB_NAME" <<SQL
-SET foreign_key_checks = 0;
-SOURCE $INSERTS;
-SET foreign_key_checks = 1;
-SQL
-
-# 5. Reset auto_increment to MAX(id)+1 on each table so future inserts
-#    don't collide with the imported ids.
-for t in shipping_tracking_binding shipping_tracking_snapshot shipping_tracking_change_log shipping_tracking_notification_account; do
-    next=$(mysql -N -e "SELECT IFNULL(MAX(id), 0) + 1 FROM $DB_NAME.$t;")
-    mysql -e "ALTER TABLE $DB_NAME.$t AUTO_INCREMENT = $next;"
-    echo "  $t: auto_increment -> $next"
-done
-
-# 6. Sanity counts.
+# 3. Independent sanity check on the MySQL side.
 echo "--- MySQL row counts ---"
 mysql -N -e "
     SELECT 'binding',  COUNT(*) FROM $DB_NAME.shipping_tracking_binding;
