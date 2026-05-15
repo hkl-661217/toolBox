@@ -73,6 +73,17 @@ public class ShippingTrackingBindingRepository {
                 Math.max(0, limit));
     }
 
+    public List<ShippingTrackingBinding> findBindingsDueForQuery(OffsetDateTime threshold) {
+        return jdbcTemplate.query("""
+                select * from shipping_tracking_binding
+                where enabled = true
+                  and (last_query_time is null or last_query_time < ?)
+                order by last_query_time asc nulls first
+                """,
+                mapper(),
+                threshold);
+    }
+
     public void updateAfterQuery(
             long id,
             String status,
