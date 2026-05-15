@@ -8,7 +8,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class ShippingTrackingProperties {
     private String notifyEmails = "";
     private String cron = "0 0 9 * * *";
-    private int batchLimit = 5;
+    private int minRequeryHours = 20;
     private int delayMinSeconds = 10;
     private int delayMaxSeconds = 20;
     private String screenshotsDir = "data/shipping-tracking/screenshots";
@@ -37,12 +37,12 @@ public class ShippingTrackingProperties {
         this.cron = cron;
     }
 
-    public int getBatchLimit() {
-        return batchLimit;
+    public int getMinRequeryHours() {
+        return minRequeryHours;
     }
 
-    public void setBatchLimit(int batchLimit) {
-        this.batchLimit = batchLimit;
+    public void setMinRequeryHours(int minRequeryHours) {
+        this.minRequeryHours = minRequeryHours;
     }
 
     public int getDelayMinSeconds() {

@@ -3,6 +3,7 @@ package com.example.myaiproject.shipping.service;
 import com.example.myaiproject.shipping.model.ShippingTrackingBinding;
 import com.example.myaiproject.shipping.repo.ShippingTrackingBindingRepository;
 import java.time.Duration;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 import org.slf4j.Logger;
@@ -29,7 +30,9 @@ public class ShippingTrackingScheduler {
 
     @Scheduled(cron = "${shipping.tracking.cron:0 0 9 * * *}")
     public void runDailyBatch() {
-        List<ShippingTrackingBinding> bindings = bindingRepository.findEnabled(properties.getBatchLimit());
+        OffsetDateTime threshold = OffsetDateTime.now()
+                .minusHours(properties.getMinRequeryHours());
+        List<ShippingTrackingBinding> bindings = bindingRepository.findBindingsDueForQuery(threshold);
         for (int i = 0; i < bindings.size(); i++) {
             ShippingTrackingBinding binding = bindings.get(i);
             try {

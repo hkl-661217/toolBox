@@ -358,6 +358,15 @@ class ShippingTrackingMvpTest {
         fakeClient.enqueueFailure(new IllegalStateException("browser failed"));
         fakeClient.enqueue(success(List.of(event("19/05/2026", "Ningbo, CN", "Loaded", "MSC A"))));
 
+        // Age both bindings past min-requery-hours so the new findBindingsDueForQuery picks them up.
+        // (Without this, baseline-queries from createBinding leave last_query_time within the
+        // 20h window and the scheduler considers nothing due.)
+        jdbcTemplate.update(
+                "update shipping_tracking_binding set last_query_time = ? where id in (?, ?)",
+                java.time.OffsetDateTime.now().minusHours(30),
+                first.id(),
+                second.id());
+
         scheduler.runDailyBatch();
 
         assertTrue(first.enabled());
