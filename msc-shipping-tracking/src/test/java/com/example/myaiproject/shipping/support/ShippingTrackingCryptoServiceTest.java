@@ -33,4 +33,28 @@ class ShippingTrackingCryptoServiceTest {
         assertEquals("same-secret", crypto.decryptIfNeeded(a));
         assertEquals("same-secret", crypto.decryptIfNeeded(b));
     }
+
+    @Test
+    void decryptIfNeededReturnsLegacyPlaintextAsIs() {
+        ShippingTrackingCryptoService crypto = new ShippingTrackingCryptoService(TEST_KEY);
+        assertEquals("old-plain-value", crypto.decryptIfNeeded("old-plain-value"));
+    }
+
+    @Test
+    void decryptIfNeededRejectsTamperedCiphertext() {
+        ShippingTrackingCryptoService crypto = new ShippingTrackingCryptoService(TEST_KEY);
+
+        String stored = crypto.encrypt("real-secret");
+        char[] chars = stored.toCharArray();
+        chars[chars.length - 1] = (chars[chars.length - 1] == 'A') ? 'B' : 'A';
+        String tampered = new String(chars);
+
+        IllegalStateException error = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> crypto.decryptIfNeeded(tampered));
+        org.junit.jupiter.api.Assertions.assertTrue(
+                error.getMessage().toLowerCase().contains("decrypt")
+                        || error.getMessage().toLowerCase().contains("malformed"),
+                "Error must point at decryption/format issue; actual: " + error.getMessage());
+    }
 }
