@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>证件照换底色 · 测试台</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: 'Helvetica Neue', sans-serif; background: #f5f7fa; margin: 0; padding: 24px; color: #303133; }
+        .wrap { max-width: 880px; margin: 0 auto; }
+        h1 { font-size: 22px; margin: 0 0 4px; }
+        .sub { color: #909399; margin: 0 0 20px; font-size: 13px; }
+        .card { background: #fff; border-radius: 12px; padding: 22px; box-shadow: 0 6px 24px rgba(0,0,0,.06); margin-bottom: 18px; }
+        label { display: block; font-size: 13px; font-weight: 600; margin: 14px 0 6px; }
+        input[type=text], input[type=number] { width: 100%; padding: 9px 11px; border: 1px solid #dcdfe6; border-radius: 8px; font-size: 14px; }
+        .row { display: flex; gap: 14px; flex-wrap: wrap; }
+        .row > div { flex: 1; min-width: 160px; }
+        .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+        .chip { padding: 6px 12px; border: 1px solid #dcdfe6; border-radius: 16px; font-size: 12px; cursor: pointer; background: #fafafa; user-select: none; }
+        .chip:hover { border-color: #409eff; color: #409eff; }
+        .chip .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: middle; border: 1px solid rgba(0,0,0,.15); }
+        .preset-row { display:flex; gap:8px; flex-wrap:wrap; }
+        .preset { padding: 8px 12px; border: 1px solid #c6e2ff; background:#ecf5ff; color:#409eff; border-radius: 8px; font-size: 12px; cursor: pointer; }
+        .preset:hover { background:#d9ecff; }
+        button.go { width: 100%; padding: 13px; margin-top: 20px; background: #409eff; color: #fff; border: 0; border-radius: 8px; font-size: 16px; cursor: pointer; }
+        button.go:disabled { background: #a0cfff; cursor: not-allowed; }
+        .results { display: flex; gap: 18px; flex-wrap: wrap; }
+        .results figure { flex: 1; min-width: 240px; margin: 0; text-align: center; }
+        .results img { max-width: 100%; max-height: 420px; border: 1px solid #ebeef5; border-radius: 8px; background: repeating-conic-gradient(#eee 0% 25%, #fff 0% 50%) 50% / 20px 20px; }
+        figcaption { font-size: 12px; color: #909399; margin-top: 6px; }
+        .meta { font-size: 13px; line-height: 1.9; margin-top: 12px; }
+        .meta b { color:#303133; }
+        .warn { background: #fdf6ec; border: 1px solid #faecd8; color: #e6a23c; padding: 10px 12px; border-radius: 8px; font-size: 13px; margin-top: 12px; }
+        .err { background: #fef0f0; border: 1px solid #fde2e2; color: #f56c6c; padding: 10px 12px; border-radius: 8px; font-size: 13px; margin-top: 12px; }
+        a.dl { display:inline-block; margin-top:10px; font-size:13px; color:#409eff; }
+    </style>
+</head>
+<body>
+<div class="wrap">
+    <h1>证件照换底色 · 测试台</h1>
+    <p class="sub">先换底 → 再改尺寸 → 最后卡KB，输出 JPEG。这是不带支付墙的内部测试页，用来验证抠图与出图效果。</p>
+
+    <div class="card">
+        <label>一键预设（点了会自动填好底色/尺寸/KB，仍可手动改）</label>
+        <div class="preset-row" id="presets"></div>
+
+        <label>选择证件照</label>
+        <input type="file" id="file" accept="image/*">
+
+        <div class="row">
+            <div>
+                <label>底色</label>
+                <input type="text" id="bg" value="#FF0000" placeholder="#FF0000 或 255,0,0">
+                <div class="chips" id="bgChips"></div>
+            </div>
+            <div>
+                <label>输出尺寸（留空 = 只换底、保持原尺寸）</label>
+                <input type="text" id="size" value="295x413" placeholder="如 295x413，留空则不改尺寸">
+                <div class="chips" id="sizeChips"></div>
+            </div>
+        </div>
+
+        <label>目标大小 (KB)</label>
+        <input type="number" id="kb" value="45" min="1" max="10240">
+
+        <button class="go" id="go">生成证件照</button>
+        <div id="msg"></div>
+    </div>
+
+    <div class="card" id="resultCard" style="display:none;">
+        <div class="results">
+            <figure><img id="origImg"><figcaption>原图</figcaption></figure>
+            <figure><img id="outImg"><figcaption>处理后</figcaption></figure>
+        </div>
+        <div class="meta" id="meta"></div>
+        <a class="dl" id="dl" download="idphoto.jpg">⬇ 下载结果</a>
+    </div>
+</div>
+
+<script>
+    const bgPresets = [
+        { name: '红底', hex: '#FF0000' },
+        { name: '蓝底', hex: '#0000FF' },
+        { name: '白底', hex: '#FFFFFF' },
+        { name: '浅蓝', hex: '#00BFF3' },
+    ];
+    const sizePresets = [
+        { name: '一寸 295×413', v: '295x413' },
+        { name: '二寸 413×579', v: '413x579' },
+        { name: '小一寸 260×378', v: '260x378' },
+        { name: '大一寸 390×567', v: '390x567' },
+    ];
+    const examPresets = [
+        { name: '教资 · 白底 · 一寸 · ≤190KB', bg: '#FFFFFF', size: '295x413', kb: 190 },
+        { name: '国考 · 白底 · 一寸 · ≤30KB', bg: '#FFFFFF', size: '295x413', kb: 30 },
+        { name: '事业编 · 红底 · 一寸 · ≤45KB', bg: '#FF0000', size: '295x413', kb: 45 },
+        { name: '医师资格 · 白底 · 小二寸 · ≤40KB', bg: '#FFFFFF', size: '413x531', kb: 40 },
+        { name: '军队文职 · 蓝底 · 一寸 · ≤100KB', bg: '#0000FF', size: '295x413', kb: 100 },
+    ];
+
+    const $ = id => document.getElementById(id);
+
+    bgPresets.forEach(p => {
+        const c = document.createElement('span');
+        c.className = 'chip';
+        c.innerHTML = `<span class="dot" style="background:${p.hex}"></span>${p.name}`;
+        c.onclick = () => $('bg').value = p.hex;
+        $('bgChips').appendChild(c);
+    });
+    sizePresets.forEach(p => {
+        const c = document.createElement('span');
+        c.className = 'chip';
+        c.textContent = p.name;
+        c.onclick = () => $('size').value = p.v;
+        $('sizeChips').appendChild(c);
+    });
+    examPresets.forEach(p => {
+        const c = document.createElement('span');
+        c.className = 'preset';
+        c.textContent = p.name;
+        c.onclick = () => { $('bg').value = p.bg; $('size').value = p.size; $('kb').value = p.kb; };
+        $('presets').appendChild(c);
+    });
+
+    $('file').onchange = e => {
+        const f = e.target.files[0];
+        if (f) $('origImg').src = URL.createObjectURL(f);
+    };
+
+    $('go').onclick = async () => {
+        const f = $('file').files[0];
+        $('msg').innerHTML = '';
+        if (!f) { $('msg').innerHTML = '<div class="err">请先选择图片</div>'; return; }
+        const fd = new FormData();
+        fd.append('file', f);
+        fd.append('bg', $('bg').value.trim());
+        if ($('size').value.trim()) fd.append('size', $('size').value.trim());
+        fd.append('targetKB', $('kb').value);
+
+        $('go').disabled = true;
+        $('go').textContent = '正在抠图与处理…';
+        try {
+            const res = await fetch('/api/idphoto', { method: 'POST', body: fd });
+            if (!res.ok) {
+                const t = await res.text();
+                $('msg').innerHTML = `<div class="err">${t || '处理失败'}</div>`;
+                return;
+            }
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            $('outImg').src = url;
+            $('dl').href = url;
+            $('origImg').src = URL.createObjectURL(f);
+
+            const h = res.headers;
+            const ratio = (Number(h.get('X-Foreground-Ratio') || 0) * 100).toFixed(0);
+            const warnRaw = h.get('X-Warning') || '';
+            const warn = warnRaw ? decodeURIComponent(warnRaw) : '';
+            $('meta').innerHTML =
+                `<b>输出尺寸：</b>${h.get('X-Final-Width')} × ${h.get('X-Final-Height')} px　　` +
+                `<b>实际大小：</b>${(Number(h.get('X-Actual-Bytes')) / 1024).toFixed(1)} KB　　` +
+                `<b>前景占比：</b>${ratio}%`;
+            $('msg').innerHTML = warn ? `<div class="warn">⚠ ${warn}</div>` : '';
+            $('resultCard').style.display = 'block';
+        } catch (err) {
+            $('msg').innerHTML = `<div class="err">请求失败：${err.message}</div>`;
+        } finally {
+            $('go').disabled = false;
+            $('go').textContent = '生成证件照';
+        }
+    };
+</script>
+</body>
+</html>

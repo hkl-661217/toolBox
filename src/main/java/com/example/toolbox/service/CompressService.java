@@ -24,15 +24,25 @@ public class CompressService {
     private static final String OUTPUT_FORMAT = "jpg";
 
     public CompressionResult compressToTargetKB(MultipartFile file, Integer targetKB) throws IOException {
-        validateInput(file, targetKB);
+        validateFile(file);
+        validateTarget(targetKB);
 
-        long targetBytes = targetKB * 1024L;
         byte[] originalBytes = file.getBytes();
         BufferedImage image = ImageIO.read(new ByteArrayInputStream(originalBytes));
         if (image == null) {
             throw new IOException("无法解析图片内容");
         }
 
+        return compressToTargetKB(image, targetKB);
+    }
+
+    public CompressionResult compressToTargetKB(BufferedImage image, Integer targetKB) throws IOException {
+        validateTarget(targetKB);
+        if (image == null) {
+            throw new IllegalArgumentException("图片内容为空");
+        }
+
+        long targetBytes = targetKB * 1024L;
         double minScale = resolveMinScale(image);
         EncodedImage result = findBestResult(image, targetBytes, minScale);
 
@@ -81,10 +91,13 @@ public class CompressService {
         );
     }
 
-    private void validateInput(MultipartFile file, Integer targetKB) {
+    private void validateFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("请先上传图片");
         }
+    }
+
+    private void validateTarget(Integer targetKB) {
         if (targetKB == null) {
             throw new IllegalArgumentException("请输入目标大小");
         }

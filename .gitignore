@@ -16,3 +16,6 @@ frontend/dist/
 # Local runtime files
 backend.log
 .codex-temp/
+
+# AI matting model (large, downloaded separately - see README)
+models/

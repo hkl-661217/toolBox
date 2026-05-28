@@ -3,20 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🚀 极速图片压缩大师 - 高精度版</title>
+    <title>🚀 极速图片工具箱 · 压缩 & 证件照换底</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Ctext%20y='.9em'%20font-size='90'%3E%F0%9F%9A%80%3C/text%3E%3C/svg%3E">
     <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
     <script src="https://unpkg.com/vue@3"></script>
     <script src="https://unpkg.com/element-plus"></script>
     <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
     <style>
-        body { background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); margin: 0; font-family: 'Helvetica Neue', sans-serif; height: 100vh; display: flex; justify-content: center; align-items: center; }
-        #app { width: 100%; display: flex; justify-content: center; }
-        .main-card { width: min(550px, calc(100vw - 32px)); background: white; padding: 40px; border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,0.1); text-align: center; box-sizing: border-box; }
-        .title { font-size: 28px; margin: 0 0 10px 0; color: #303133; }
-        .subtitle { color: #909399; margin-bottom: 30px; }
-        .uploader-area { border: 2px dashed #409EFF; border-radius: 8px; padding: 40px; background: #ecf5ff; cursor: pointer; transition: 0.3s; }
+        body { background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); margin: 0; font-family: 'Helvetica Neue', sans-serif; min-height: 100vh; display: flex; justify-content: center; align-items: center; }
+        #app { width: 100%; display: flex; justify-content: center; padding: 24px 0; box-sizing: border-box; }
+        .main-card { width: min(560px, calc(100vw - 32px)); background: white; padding: 36px 40px; border-radius: 14px; box-shadow: 0 12px 40px rgba(0,0,0,0.1); text-align: center; box-sizing: border-box; }
+        .title { font-size: 26px; margin: 0 0 8px 0; color: #303133; }
+        .subtitle { color: #909399; margin-bottom: 22px; font-size: 14px; }
+        .uploader-area { border: 2px dashed #409EFF; border-radius: 10px; padding: 32px; background: #ecf5ff; cursor: pointer; transition: 0.3s; }
         .uploader-area:hover { background: #d9ecff; }
-        .config-bar { margin-top: 30px; display: flex; align-items: center; justify-content: center; gap: 15px; }
+        .config-bar { margin-top: 20px; display: flex; align-items: center; justify-content: center; gap: 12px; }
         .preview-container { position: relative; width: 100%; height: 250px; border-radius: 8px; overflow: hidden; background: #f0f2f5; display: flex; justify-content: center; align-items: center; margin: 20px 0; border: 1px solid #dcdfe6; }
         .preview-img { max-width: 100%; max-height: 100%; transition: filter 0.5s ease; }
         .is-blurred { filter: blur(15px); }
@@ -27,10 +28,30 @@
         .stats-item { font-size: 12px; color: #606266; }
         .unlock-section { margin-bottom: 18px; }
         .unlock-actions { display: flex; gap: 12px; margin-top: 14px; }
+
+        /* —— 换底 tab —— */
+        .tool-tabs { margin-top: 8px; }
+        .tool-tabs .el-tabs__item { font-size: 16px; font-weight: 600; height: 44px; }
+        .id-form { text-align: left; padding-top: 4px; }
+        .field-label { font-size: 13px; font-weight: 700; color: #303133; margin: 16px 0 8px; }
+        .field-label .hint { font-weight: 400; color: #909399; font-size: 12px; margin-left: 4px; }
+        .preset-label { font-size: 13px; font-weight: 700; color: #303133; margin: 4px 0 8px; }
+        .preset-row { display: flex; gap: 8px; flex-wrap: wrap; }
+        .preset { padding: 7px 12px; border: 1px solid #c6e2ff; background: #ecf5ff; color: #409eff; border-radius: 8px; font-size: 12px; cursor: pointer; transition: .2s; user-select: none; }
+        .preset:hover { background: #d9ecff; }
+        .swatch-row, .chip-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+        .swatch, .chip { display: inline-flex; align-items: center; padding: 6px 12px; border: 1px solid #dcdfe6; border-radius: 16px; font-size: 12px; cursor: pointer; background: #fff; user-select: none; transition: .2s; }
+        .swatch:hover, .chip:hover { border-color: #409eff; color: #409eff; }
+        .swatch.active, .chip.active { border-color: #409eff; color: #409eff; background: #ecf5ff; font-weight: 600; }
+        .swatch-dot { width: 12px; height: 12px; border-radius: 50%; margin-right: 6px; border: 1px solid rgba(0,0,0,.15); display: inline-block; }
+        .id-input { margin-bottom: 4px; }
+        .manual-fallback { margin: 14px 0; }
+        .warn-tip { background: #fdf6ec; border: 1px solid #faecd8; color: #e6a23c; padding: 10px 12px; border-radius: 8px; font-size: 13px; margin-bottom: 10px; text-align: left; }
+
         @media (max-width: 640px) {
-            body { padding: 16px; box-sizing: border-box; height: auto; min-height: 100vh; align-items: flex-start; }
+            body { padding: 16px; box-sizing: border-box; min-height: 100vh; align-items: flex-start; }
             .main-card { padding: 24px 16px; width: 100%; margin-top: 16px; }
-            .title { font-size: 24px; }
+            .title { font-size: 22px; }
             .config-bar { flex-wrap: wrap; gap: 10px; }
             .preview-container { height: 220px; }
             .stats-grid { grid-template-columns: 1fr; gap: 8px; }
@@ -41,8 +62,8 @@
 <body>
     <div id="app">
         <div class="main-card">
-            <h1 class="title">🚀 极速图片压缩大师</h1>
-            <p class="subtitle">优先精确命中目标 KB，再尽量保住尺寸与清晰度</p>
+            <h1 class="title">🚀 极速图片工具箱</h1>
+            <p class="subtitle">精准压缩 · 证件照换底，报名照一步到位</p>
 
             <div class="uploader-area" @click="$refs.fileInput.click()">
                 <div v-if="!selectedFileName">
@@ -56,24 +77,62 @@
                 <input type="file" ref="fileInput" @change="onFileChange" accept="image/*" style="display: none">
             </div>
 
-            <div class="config-bar">
-                <span>期望压缩到:</span>
-                <el-input-number v-model="targetKB" :min="1" :max="10240" :step="50"></el-input-number>
-                <span>KB</span>
-            </div>
+            <el-tabs v-model="activeTab" stretch class="tool-tabs">
+                <!-- 图片压缩 -->
+                <el-tab-pane label="📦 图片压缩" name="compress">
+                    <div class="config-bar">
+                        <span>期望压缩到:</span>
+                        <el-input-number v-model="targetKB" :min="1" :max="10240" :step="50"></el-input-number>
+                        <span>KB</span>
+                    </div>
 
-            <el-button type="primary" size="large" :loading="loading" @click="submit" style="width: 100%; height: 50px; margin-top: 25px; font-size: 18px;">
-                {{ loading ? '正在执行极限精度压缩...' : '极速压缩并预览' }}
-            </el-button>
+                    <el-button type="primary" size="large" :loading="loading" @click="submit" style="width: 100%; height: 50px; margin-top: 22px; font-size: 18px;">
+                        {{ loading ? '正在执行极限精度压缩...' : '极速压缩并预览' }}
+                    </el-button>
+                </el-tab-pane>
 
-            <!-- 支付墙弹窗 -->
+                <!-- 证件照换底 -->
+                <el-tab-pane label="🪪 证件照换底" name="idphoto">
+                    <div class="id-form">
+                        <div class="preset-label">🎯 一键预设（点了自动填好，仍可手动改）</div>
+                        <div class="preset-row">
+                            <span v-for="p in examPresets" :key="p.name" class="preset" @click="applyPreset(p)">{{ p.name }}</span>
+                        </div>
+
+                        <div class="field-label">底色</div>
+                        <div class="swatch-row">
+                            <span v-for="c in bgPresets" :key="c.hex" class="swatch" :class="{active: (idBg || '').toUpperCase() === c.hex}" @click="idBg = c.hex">
+                                <i class="swatch-dot" :style="{background: c.hex}"></i>{{ c.name }}
+                            </span>
+                        </div>
+
+                        <div class="field-label">输出尺寸 <span class="hint">留空 = 只换底、不改尺寸</span></div>
+                        <div class="chip-row">
+                            <span v-for="s in sizePresets" :key="s.v" class="chip" :class="{active: idSize === s.v}" @click="idSize = s.v">{{ s.name }}</span>
+                        </div>
+                        <el-input v-model="idSize" class="id-input" placeholder="如 295x413，留空则不改尺寸"></el-input>
+
+                        <div class="field-label">目标大小</div>
+                        <div class="config-bar" style="justify-content: flex-start;">
+                            <el-input-number v-model="idKB" :min="1" :max="10240" :step="10"></el-input-number>
+                            <span>KB</span>
+                        </div>
+
+                        <el-button type="primary" size="large" :loading="idLoading" @click="submitIdPhoto" style="width: 100%; height: 50px; margin-top: 22px; font-size: 18px;">
+                            {{ idLoading ? '正在抠图与处理...' : '生成证件照' }}
+                        </el-button>
+                    </div>
+                </el-tab-pane>
+            </el-tabs>
+
+            <!-- 支付墙弹窗（压缩 / 换底 共用） -->
             <el-dialog v-model="visible" width="min(480px, calc(100vw - 24px))" center :close-on-click-modal="false">
                 <template #header>
-                    <span style="font-size: 16px; font-weight: 700;">🎉 压缩已完成</span>
+                    <span style="font-size: 16px; font-weight: 700;">{{ activeTab === 'idphoto' ? '🎉 证件照已生成' : '🎉 压缩已完成' }}</span>
                 </template>
                 <div style="text-align: center;">
-                    <p style="color: #67C23A; font-weight: bold; margin-bottom: 15px;">压缩图已就绪，请实时验货：</p>
-                    
+                    <p style="color: #67C23A; font-weight: bold; margin-bottom: 15px;">{{ activeTab === 'idphoto' ? '证件照已就绪，请实时验货：' : '压缩图已就绪，请实时验货：' }}</p>
+
                     <div class="preview-container">
                         <img :src="previewUrl" class="preview-img" :class="{'is-blurred': !isPaid}">
                         <div v-if="!isPaid" class="lock-mask">
@@ -82,7 +141,8 @@
                         </div>
                     </div>
 
-                    <div class="stats-card" v-if="compressionMeta">
+                    <!-- 压缩详情 -->
+                    <div class="stats-card" v-if="activeTab === 'compress' && compressionMeta">
                         <p class="stats-title">压缩详情</p>
                         <div class="stats-grid">
                             <div class="stats-item">目标大小: {{ targetKB }} KB</div>
@@ -94,9 +154,28 @@
                         </div>
                     </div>
 
+                    <!-- 证件照详情 -->
+                    <div class="stats-card" v-if="activeTab === 'idphoto' && idMeta">
+                        <p class="stats-title">证件照详情</p>
+                        <div class="stats-grid">
+                            <div class="stats-item">输出尺寸: {{ idMeta.finalWidth }} × {{ idMeta.finalHeight }}</div>
+                            <div class="stats-item">实际大小: {{ idMeta.actualKB }} KB</div>
+                            <div class="stats-item">目标大小: {{ idKB }} KB</div>
+                            <div class="stats-item">前景占比: {{ idMeta.foregroundPct }}%</div>
+                        </div>
+                    </div>
+
+                    <!-- 转人工兜底（换底专属） -->
+                    <div v-if="activeTab === 'idphoto'" class="manual-fallback">
+                        <div v-if="idMeta && idMeta.warning" class="warn-tip">⚠ {{ idMeta.warning }}</div>
+                        <el-button :type="(idMeta && idMeta.warning) ? 'warning' : 'info'" :plain="!(idMeta && idMeta.warning)" @click="goToXianyuId" style="width: 100%;">
+                            抠图不满意？转人工精修（30分钟出图）
+                        </el-button>
+                    </div>
+
                     <div class="unlock-section" v-if="!isPaid">
-                        <el-button type="primary" @click="goToXianyu" style="width: 100%; height: 44px;">
-                            前往获取单次解锁码 (4.9元)
+                        <el-button type="primary" @click="activeTab === 'idphoto' ? goToXianyuId() : goToXianyu()" style="width: 100%; height: 44px;">
+                            前往获取单次解锁码 (2.99元)
                         </el-button>
                         <div class="unlock-actions">
                             <el-input v-model="verifyCode" maxlength="6" placeholder="请输入 6 位解锁码"></el-input>
@@ -118,6 +197,7 @@
             setup() {
                 const CACHED_PHOTO_KEY = 'cached_compressed_photo';
                 const PHOTO_EXPIRE_KEY = 'photo_expire_time';
+                const activeTab = ref('compress');
                 const targetKB = ref(50);
                 const loading = ref(false);
                 const visible = ref(false);
@@ -132,9 +212,42 @@
                 const compressionMeta = ref(null);
                 const outputFormat = ref('jpg');
                 const verifyCode = ref('');
+
+                // 换底专属状态
+                const idBg = ref('#FF0000');
+                const idSize = ref('295x413');
+                const idKB = ref(45);
+                const idLoading = ref(false);
+                const idMeta = ref(null);
+
+                const bgPresets = [
+                    { name: '红底', hex: '#FF0000' },
+                    { name: '蓝底', hex: '#0000FF' },
+                    { name: '白底', hex: '#FFFFFF' },
+                    { name: '浅蓝', hex: '#00BFF3' },
+                ];
+                const sizePresets = [
+                    { name: '一寸 295×413', v: '295x413' },
+                    { name: '二寸 413×579', v: '413x579' },
+                    { name: '小一寸 260×378', v: '260x378' },
+                    { name: '大一寸 390×567', v: '390x567' },
+                ];
+                const examPresets = [
+                    { name: '教资·白底·190KB', bg: '#FFFFFF', size: '295x413', kb: 190 },
+                    { name: '国考·白底·30KB', bg: '#FFFFFF', size: '295x413', kb: 30 },
+                    { name: '事业编·红底·45KB', bg: '#FF0000', size: '295x413', kb: 45 },
+                    { name: '医师·白底·40KB', bg: '#FFFFFF', size: '413x531', kb: 40 },
+                    { name: '军队文职·蓝底·100KB', bg: '#0000FF', size: '295x413', kb: 100 },
+                ];
+
+                // 压缩款解锁/跳转
                 const kouling = "【闲鱼】https://m.tb.cn/h.iKsKJjG?tk=zWPc5hQJCjB CZ007 「我在闲鱼发布了【证件照/教资图片精准压缩工具 单次高清解锁码】」点击链接直接打开";
                 const shortUrl = "https://m.tb.cn/h.iKsKJjG";
                 const itemId = "1043861534934";
+                // 换底转人工 → 通用兜底款
+                const idKouling = "【闲鱼】https://m.tb.cn/h.RU0kTxN?tk=ISRQ5CiiNej HU287 「我在闲鱼发布了【报名照审核不过修改 50KB急单包过】」点击链接直接打开";
+                const idShortUrl = "https://m.tb.cn/h.RU0kTxN";
+                const idItemId = "1054905117302";
 
                 const clearCachedPhoto = () => {
                     localStorage.removeItem(CACHED_PHOTO_KEY);
@@ -174,6 +287,7 @@
                     selectedFileSize.value = 0;
                     fileObj.value = null;
                     compressionMeta.value = null;
+                    idMeta.value = null;
                 };
 
                 const onFileChange = (e) => {
@@ -185,6 +299,7 @@
                         isPaid.value = false;
                         verifyCode.value = '';
                         compressionMeta.value = null;
+                        idMeta.value = null;
                         outputFormat.value = 'jpg';
                         if(unlockedUrl.value) URL.revokeObjectURL(unlockedUrl.value);
                         previewUrl.value = '';
@@ -223,20 +338,28 @@
                     }
                 };
 
-                const goToXianyu = async () => {
+                const openXianyu = async (kl, su, iid) => {
                     try {
-                        await copyText(kouling);
+                        await copyText(kl);
                         ElementPlus.ElMessage.success("淘口令已复制！若未自动跳转，请直接打开闲鱼App");
                     } catch (_) {
                         ElementPlus.ElMessage.warning("淘口令复制失败，请手动复制后打开闲鱼App");
                     }
 
-                    const appUrl = `fleamarket://item?id=${itemId}`;
-                    window.location.href = appUrl;
+                    window.location.href = `fleamarket://item?id=${iid}`;
 
                     setTimeout(() => {
-                        window.open(shortUrl, '_blank');
+                        window.open(su, '_blank');
                     }, 800);
+                };
+
+                const goToXianyu = () => openXianyu(kouling, shortUrl, itemId);
+                const goToXianyuId = () => openXianyu(idKouling, idShortUrl, idItemId);
+
+                const applyPreset = (p) => {
+                    idBg.value = p.bg;
+                    idSize.value = p.size;
+                    idKB.value = p.kb;
                 };
 
                 const createLockedPreview = (blob) => new Promise((resolve, reject) => {
@@ -271,6 +394,7 @@
                         const res = await axios.post('/api/compress', fd, { responseType: 'blob' });
                         actualBlob.value = res.data;
                         compressionMeta.value = parseCompressionMeta(res.headers);
+                        idMeta.value = null;
                         outputFormat.value = (res.headers?.['x-output-format'] || 'jpg').toLowerCase();
                         if (unlockedUrl.value && unlockedUrl.value.startsWith('blob:')) {
                             URL.revokeObjectURL(unlockedUrl.value);
@@ -289,6 +413,55 @@
                         ElementPlus.ElMessage.error(message || '压缩失败，请稍后重试');
                     } finally {
                         loading.value = false;
+                    }
+                };
+
+                const submitIdPhoto = async () => {
+                    if(!fileObj.value) return ElementPlus.ElMessage.warning('请先选择图片');
+                    if(!idBg.value || !idBg.value.trim()) return ElementPlus.ElMessage.warning('请填写底色');
+                    if(!idKB.value || idKB.value < 1) return ElementPlus.ElMessage.warning('目标大小必须大于 0KB');
+                    idLoading.value = true;
+                    const fd = new FormData();
+                    fd.append('file', fileObj.value);
+                    fd.append('bg', idBg.value.trim());
+                    if (idSize.value && idSize.value.trim()) fd.append('size', idSize.value.trim());
+                    fd.append('targetKB', idKB.value);
+                    try {
+                        const res = await axios.post('/api/idphoto', fd, { responseType: 'blob' });
+                        actualBlob.value = res.data;
+                        const h = res.headers || {};
+                        const warnRaw = h['x-warning'] || '';
+                        let warning = '';
+                        if (warnRaw) {
+                            try { warning = decodeURIComponent(warnRaw.replace(/\+/g, '%20')); }
+                            catch (_) { warning = warnRaw; }
+                        }
+                        idMeta.value = {
+                            finalWidth: Number(h['x-final-width'] || 0),
+                            finalHeight: Number(h['x-final-height'] || 0),
+                            actualKB: (Number(h['x-actual-bytes'] || 0) / 1024).toFixed(2),
+                            foregroundPct: (Number(h['x-foreground-ratio'] || 0) * 100).toFixed(0),
+                            warning
+                        };
+                        compressionMeta.value = null;
+                        outputFormat.value = (h['x-output-format'] || 'jpg').toLowerCase();
+                        if (unlockedUrl.value && unlockedUrl.value.startsWith('blob:')) {
+                            URL.revokeObjectURL(unlockedUrl.value);
+                        }
+                        unlockedUrl.value = await blobToDataUrl(actualBlob.value);
+                        localStorage.setItem(CACHED_PHOTO_KEY, unlockedUrl.value);
+                        localStorage.setItem(PHOTO_EXPIRE_KEY, String(Date.now() + 1000 * 60 * 60));
+                        previewUrl.value = await createLockedPreview(actualBlob.value);
+                        visible.value = true;
+                        isPaid.value = false;
+                        verifyCode.value = '';
+                    } catch(e) {
+                        const message = e.response?.data
+                            ? await readErrorText(e.response.data)
+                            : '';
+                        ElementPlus.ElMessage.error(message || '换底处理失败，请稍后重试');
+                    } finally {
+                        idLoading.value = false;
                     }
                 };
 
@@ -315,13 +488,14 @@
 
                 const downloadFile = () => {
                     if (!unlockedUrl.value) {
-                        ElementPlus.ElMessage.error('下载资源未准备好，请重新压缩一次');
+                        ElementPlus.ElMessage.error('下载资源未准备好，请重新生成一次');
                         return;
                     }
                     const baseName = selectedFileName.value.replace(/\.[^.]+$/, '');
+                    const prefix = activeTab.value === 'idphoto' ? 'idphoto' : 'compressed';
                     const link = document.createElement('a');
                     link.href = unlockedUrl.value;
-                    link.download = `compressed_${baseName}.${outputFormat.value}`;
+                    link.download = `${prefix}_${baseName}.${outputFormat.value}`;
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);
@@ -364,7 +538,7 @@
                     restoreCachedPhoto();
                 });
 
-                return { targetKB, loading, visible, isPaid, verifying, selectedFileName, selectedFileSize, onFileChange, submit, verifyAndUnlock, handleDownloadClick, previewUrl, compressionMeta, verifyCode, goToXianyu };
+                return { activeTab, targetKB, loading, visible, isPaid, verifying, selectedFileName, selectedFileSize, onFileChange, submit, verifyAndUnlock, handleDownloadClick, previewUrl, compressionMeta, verifyCode, goToXianyu, goToXianyuId, idBg, idSize, idKB, idLoading, idMeta, bgPresets, sizePresets, examPresets, applyPreset, submitIdPhoto };
             }
         }).use(ElementPlus).mount('#app');
     </script>
