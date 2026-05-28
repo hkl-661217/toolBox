@@ -21,6 +21,8 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 
 @Controller
 @RequestMapping("/api")
@@ -29,6 +31,11 @@ public class IdPhotoController {
     private static final Logger log = LoggerFactory.getLogger(IdPhotoController.class);
 
     private final IdPhotoService idPhotoService;
+
+    // 小内存/双核机器上，换底(抠图)很吃 CPU+内存，串行处理避免并发把 JVM 撑爆。
+    // 闸门设在解码图片之前：排队的请求不会去解码大图，从根上挡住并发 OOM。
+    private static final long BUSY_WAIT_SECONDS = 90;
+    private final Semaphore idPhotoSlots = new Semaphore(1);
 
     public IdPhotoController(IdPhotoService idPhotoService) {
         this.idPhotoService = idPhotoService;
@@ -44,12 +51,21 @@ public class IdPhotoController {
                                      @RequestParam("bg") String bg,
                                      @RequestParam(value = "size", required = false) String size,
                                      @RequestParam("targetKB") Integer targetKB) {
+        boolean acquired = false;
         try {
             if (file == null || file.isEmpty()) {
                 return badRequest("请先上传图片");
             }
             Color color = parseColor(bg);
             int[] wh = parseSize(size);
+
+            // 限流闸门（在解码大图之前）：忙则等待，超时则拒绝，避免并发把内存撑爆
+            if (!idPhotoSlots.tryAcquire(BUSY_WAIT_SECONDS, TimeUnit.SECONDS)) {
+                return ResponseEntity.status(503)
+                        .contentType(MediaType.TEXT_PLAIN)
+                        .body("当前换底任务繁忙，请稍后重试");
+            }
+            acquired = true;
 
             BufferedImage source = ImageIO.read(new ByteArrayInputStream(file.getBytes()));
             if (source == null) {
@@ -77,11 +93,20 @@ public class IdPhotoController {
                     .body(c.bytes());
         } catch (IllegalArgumentException e) {
             return badRequest(e.getMessage());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return ResponseEntity.status(503)
+                    .contentType(MediaType.TEXT_PLAIN)
+                    .body("服务繁忙，请稍后重试");
         } catch (Exception e) {
             log.error("证件照处理失败", e);
             return ResponseEntity.internalServerError()
                     .contentType(MediaType.TEXT_PLAIN)
                     .body("处理失败: " + e.getMessage());
+        } finally {
+            if (acquired) {
+                idPhotoSlots.release();
+            }
         }
     }
 

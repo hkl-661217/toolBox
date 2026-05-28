@@ -29,6 +29,9 @@ public class IdPhotoService {
     private static final int DECON_SOLID = 200;     // alpha 高于此视为“干净前景”，作为颜色来源
     private static final int DECON_GROW = 3;        // 前景色向外扩散的像素圈数
 
+    // 处理前把输入最长边缩到此值，省内存/提速（证件照输出本就远小于此，不损最终质量）
+    private static final int MAX_INPUT_DIM = 1500;
+
     // 质量告警阈值
     private static final double FG_RATIO_MIN = 0.15;
     private static final double FG_RATIO_MAX = 0.92;
@@ -45,6 +48,7 @@ public class IdPhotoService {
 
     public IdPhotoResult process(BufferedImage source, Color bgColor,
                                  Integer targetWidth, Integer targetHeight, Integer targetKB) throws Exception {
+        source = downscaleIfNeeded(source);
         int w = source.getWidth();
         int h = source.getHeight();
 
@@ -68,6 +72,26 @@ public class IdPhotoService {
                 compressed.finalWidth(), compressed.finalHeight(),
                 compressed.bytes().length / 1024, Math.round(fgRatio * 100), warnings.size());
         return new IdPhotoResult(compressed, fgRatio, warnings);
+    }
+
+    /** 输入图最长边超过 MAX_INPUT_DIM 时等比缩小，降低后续逐像素处理的内存与耗时。 */
+    private BufferedImage downscaleIfNeeded(BufferedImage src) {
+        int w = src.getWidth();
+        int h = src.getHeight();
+        int max = Math.max(w, h);
+        if (max <= MAX_INPUT_DIM) {
+            return src;
+        }
+        double scale = (double) MAX_INPUT_DIM / max;
+        int nw = Math.max(1, (int) Math.round(w * scale));
+        int nh = Math.max(1, (int) Math.round(h * scale));
+        BufferedImage dst = new BufferedImage(nw, nh, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = dst.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        g.drawImage(src, 0, 0, nw, nh, null);
+        g.dispose();
+        log.info("输入图过大({}x{})，缩至 {}x{} 以省内存", w, h, nw, nh);
+        return dst;
     }
 
     /**
